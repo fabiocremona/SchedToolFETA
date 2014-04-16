@@ -1,0 +1,181 @@
+std::vector<float> f0; f0.push_back(0.3);
+std::vector<float> f1; f1.push_back(0.2);
+std::vector<float> f2; f2.push_back(0.5);
+std::vector<float> f3; f3.push_back(1.3);
+std::vector<float> f4; f4.push_back(0.8);
+std::vector<float> f5; f5.push_back(1);
+std::vector<float> f6; f6.push_back(0.8);
+std::vector<float> f7; f7.push_back(0.5);
+std::vector<float> f8; f8.push_back(0.5);
+
+Component c0("");
+
+Function ff0("ff0", 3, f0); Function ff1("ff1", 1, f1); Function ff2("ff2", 3, f2); Function ff3("ff3", 6, f3);
+Function ff4("ff4", 5, f4); Function ff5("ff5", 10, f5); Function ff6("ff6", 20, f6); Function ff7("ff7", 20, f7);
+Function ff8("ff8", 20, f8);
+
+c0.addFunction(&ff0); c0.addFunction(&ff1); c0.addFunction(&ff2); c0.addFunction(&ff3);
+c0.addFunction(&ff4); c0.addFunction(&ff5); c0.addFunction(&ff6); c0.addFunction(&ff7); c0.addFunction(&ff8);
+
+c0.connect(&ff0, &ff2); c0.connect(&ff0, &ff3); c0.connect(&ff1, &ff2); c0.connect(&ff2, &ff4);
+c0.connect(&ff2, &ff5); c0.connect(&ff3, &ff5); c0.connect(&ff3, &ff6); c0.connect(&ff7, &ff8);
+
+Task t0("", 1); Task t1("", 2); Task t2("", 3); Task t3("", 4); Task t4("", 5);
+t0.add(&ff0); t0.add(&ff1);
+t1.add(&ff2); t1.add(&ff3);
+t2.add(&ff4);
+t3.add(&ff5); t3.add(&ff6);
+t4.add(&ff7); t4.add(&ff8);
+std::vector<Task*> ts0;
+
+ts0.push_back(&t0); ts0.push_back(&t1); ts0.push_back(&t2); ts0.push_back(&t3); ts0.push_back(&t4);
+
+
+
+void Placement::optimizeTasks()
+{
+    std::vector<Task*> BL;
+    std::vector<Task*> PBL;
+    
+    while (NAT.size() != 0)
+    {
+        // Take the enabled tasks and order them by density
+        auto en_tasks = getEnabledTasks();
+        orderByDensity(en_tasks);
+        
+        // Task is the most dense enabled task
+        auto task = en_tasks.front();
+        
+        std::map<TaskSet*, float> slacks;
+        
+        std::vector<TaskSet*> affine_cores;
+        
+        if (std::find(PBL.begin(), PBL.end(), task) == PBL.end())
+            affine_cores = getAffineCores(task);
+        else affine_cores = cores;
+        
+        // Allocate on all affine cores (tryAssign)
+        for (auto core : affine_cores)
+        {
+            core->add(task);
+            core->checkSchedulability();
+            core->computeResponseTime();
+            slacks[core] = core->getMinSlack();
+        }
+        
+        // Take only the schedulable solutions
+        std::map<TaskSet*, float> affine_sched_cores;
+        for (auto c : slacks)
+            if (c.first->checkSchedulability())
+                affine_sched_cores[c.first] = c.second;
+        
+        // end tryAssign
+        
+        // If there are schedulable affine solutions
+        //  - take the best allocation
+        //  - remove other assignments
+        if (affine_sched_cores.size() != 0)
+        {
+            
+            TaskSet* best_core = affine_sched_cores.begin()->first;
+            for (auto i : affine_sched_cores)
+                if(i.second > affine_sched_cores[best_core]) best_core = i.first;
+            
+            // Remove all the allocations except the best
+            for (auto i = cores.begin(); i != cores.end(); i++)
+                if (*i != best_core) (*i)->remove(task);
+            
+            auto pbl = std::find(PBL.begin(), PBL.end(), task);
+            auto bl = std::find(BL.begin(), BL.end(), task);
+            
+            if (pbl != PBL.end())
+                PBL.erase(pbl);
+            
+            if (bl != BL.end())
+                BL.erase(bl);
+            
+            NAT.erase(std::find(NAT.begin(), NAT.end(), task));
+        }
+        
+        else if (affine_sched_cores.size() == 0)
+        {
+            std::cout << "No schedulable solution for: " << task->getName() << std::endl;
+            auto pbl = std::find(PBL.begin(), PBL.end(), task);
+            auto bl = std::find(BL.begin(), BL.end(), task);
+            
+            if (pbl != PBL.end()) {
+                std::cout << "Unable to find a schedulable solution" << std::endl;
+                return;
+            }
+            
+            else if (bl != BL.end()) {
+                std::cout << "Try to assign task " << task->getName() << " in a non affine Core" << std::endl;
+                    PBL.push_back(task);
+            }
+            
+            
+            else
+                BL.push_back(task);
+            
+            // Deallocate the affine set
+            auto affine_set = getAffineTasks(task);
+            for (auto affine_elem : affine_set)
+                for (auto c : cores)
+                    c->remove(affine_elem);
+            
+            // Deallocate task
+            for (auto c : affine_cores)
+                c->remove(task);
+            
+            // The affine set must be re-allocated
+            for (auto t : affine_set)
+                NAT.push_back(t);
+            
+        }
+        
+        orderByDensity(NAT);
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+    for (auto task : taskset)
+    {
+        if (task->getFunSize())
+        {
+            period = task->getPeriod();
+            break;
+        }
+    }
+	for (auto i = taskset.begin(); i != taskset.end(); i++)
+        if ((*i)->getFunSize())
+            period = gcd(period, (*i)->getPeriod());
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+//                if (intersection > period*rbf.size())
+//                    resp_t.push_back(intersection);
+//                else
+//                    resp_t.push_back(intersection - t);            

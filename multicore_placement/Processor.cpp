@@ -240,7 +240,7 @@ void Processor::start()
         for (auto core : affine_cores)
         {
             core->addFunction(runnable);
-            if(core->checkSchedulabilitySc() == true)
+            if(core->checkSchedulability() == true)
                 affine_sched_cores[core] = core->getMinSlack();
         }
         
@@ -318,7 +318,7 @@ void Processor::start()
                 NAR.push_back(t.first);
         }        
         for (auto core : cores)
-            core->checkSchedulabilitySc();
+            core->checkSchedulability();
     }
 }
 
@@ -334,8 +334,7 @@ void Processor::interCoreAllocation()
         std::sort(en_runnables.begin(), en_runnables.end(), sort_Fdensity);
         auto runnable = en_runnables.front();
         
-        //std::cout << "Trying to allocate: " << runnable->getName() << std::endl;
-        //std::map<TaskSet*, float> slacks;
+        std::cout << "Trying to allocate: " << runnable->getName() << std::endl;
         
         // Get affine cores
         std::vector<TaskSet*> affine_cores;
@@ -343,32 +342,52 @@ void Processor::interCoreAllocation()
             affine_cores = getAffineCores(runnable);
         else affine_cores = cores;
         
-        //std::cout << "Affine cores " << affine_cores.size() << std::endl;
+        std::cout << "Affine cores " << affine_cores.size() << std::endl;
         
         // Get the response time for all affine runnables
         std::vector<float> offsets;
+        offsets.clear();
+        offsets.push_back(0);
         for (auto core : cores)
         {
+            
             for (auto pred : runnable->getPredecessors())
             {
-                auto offset = core->getResponseTime(pred.first);
+                float offset = core->getResponseTime(pred.first);
                 if (offset > 0)
+                {
+                    std::cout << "Predecessor: " << pred.first->getName() << " on core " << std::distance(cores.begin(), std::find(cores.begin(), cores.end(), core)) << std::endl;
+                    std::cout << "\tOffset: " << offset << std::endl;
                     offsets.push_back(offset);
+                }
+                else if (offset == 0)
+                    continue;
+                else if (offset == -1)
+                {
+                    std::cout << "Error: Previous taskset not schedulable" << std::endl;
+                    exit(-1);
+                }
             }
         }
         
-        long offset = (long)(*std::max_element(offsets.begin(), offsets.end()));
+        float offset = (*std::max_element(offsets.begin(), offsets.end()));
         
         // Allocate on all affine cores (tryAssign)
         std::map<TaskSet*, float> affine_sched_cores;
         for (auto core : affine_cores)
         {
             core->addFunction(runnable, offset);
-            if(core->checkSchedulabilitySc() == true)
+            if(core->checkSchedulability() == true)
+            {
+                
                 affine_sched_cores[core] = core->getMinSlack();
+                
+            }
+            else
+                core->removeFunction(runnable);
         }
         
-        //std::cout << "Affine schedulable cores " << affine_sched_cores.size() << std::endl;
+        std::cout << "Affine schedulable cores " << affine_sched_cores.size() << std::endl;
         //printInternalStats(cores);
         
         // If there are schedulable affine solutions
@@ -380,7 +399,7 @@ void Processor::interCoreAllocation()
             for (auto i : affine_sched_cores)
                 if(i.second > affine_sched_cores[best_core]) best_core = i.first;
             
-            //std::cout << "Runnable " << runnable->getName() << " allocated on core " << std::distance(cores.begin(), std::find(cores.begin(), cores.end(), best_core)) << std::endl;
+            std::cout << "Runnable " << runnable->getName() << " allocated on core " << std::distance(cores.begin(), std::find(cores.begin(), cores.end(), best_core)) << " with offset: " << best_core->getTask(runnable)->getOffset() << std::endl;
             
             // Remove all the allocations except the best
             for (auto i = cores.begin(); i != cores.end(); i++)
@@ -442,7 +461,7 @@ void Processor::interCoreAllocation()
                 NAR.push_back(t.first);
         }
         for (auto core : cores)
-            core->checkSchedulabilitySc();
+            core->checkSchedulability();
     }
 }
 
@@ -528,9 +547,15 @@ void Processor::computeRT()
             if (core_f != core_s)
             {
                 if (fun->getPeriod() > succ.first->getPeriod())
+                {
                     rt1_size += succ.second;
+                    total_size += succ.second;
+                }
                 if (fun->getPeriod() < succ.first->getPeriod())
+                {
                     rt2_size += succ.second;
+                    total_size += succ.second;
+                }
             }
         }
     }
@@ -551,10 +576,6 @@ long Processor::getRT()
     return total_size;
 }
 
-void Processor::checkSchedulabilitySc()
-{
-    
-}
 
 
 

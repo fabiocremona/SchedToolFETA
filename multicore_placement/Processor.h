@@ -56,9 +56,7 @@ class Processor {
     std::vector<Function*> getEnabledRunnables();
     
     void printInternalStats(std::vector<TaskSet*>);
-    
-    void checkSchedulability();
-    
+        
 public:
     
     Processor(std::vector<Task* > , int);
