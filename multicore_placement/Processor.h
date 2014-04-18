@@ -29,14 +29,14 @@
 
 using namespace std;
 
+class TaskSet;
+
 class Processor {
     
     TaskSet *task_set;
     
-    std::vector<Task*> tasks;
     std::vector<Function*> runnables;
     
-    std::vector<Task*> NAT;
     std::vector<Function*> NAR;
     
     std::vector<TaskSet*> cores;
@@ -47,14 +47,15 @@ class Processor {
     
     void orderByDensity(std::vector<Task*>);
     void orderByDensity(std::vector<Function*>);
-    void checkRMAssumption();
-    std::vector<TaskSet*> getAffineCores(Task*);
-    std::vector<TaskSet*> getAffineCores(Function*);
-    std::vector<Task*> getAffineTasks(Task*);
     
-    std::vector<Task*> getEnabledTasks();
+    // Returns the list of affine cores wich utiliazation bound is below
+    //  a given threshold
+    std::vector<TaskSet*> getAffineCores(Function*, float);
+    
+    // Returns the list of runnables which has predecessors already allocated
     std::vector<Function*> getEnabledRunnables();
     
+    // Print some internal stats
     void printInternalStats(std::vector<TaskSet*>);
         
 public:
@@ -63,8 +64,8 @@ public:
     Processor(std::vector<Function*>, int);
     ~Processor();
     
-    void start();
-    void interCoreAllocation();
+    // Allocate runnables with an utilization bound for each core
+    void interCoreAllocation(float);
     
     void test();
     

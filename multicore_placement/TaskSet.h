@@ -29,6 +29,7 @@
 #include "Feta.h"
 #include "Task.h"
 #include "Extras.h"
+#include "Processor.h"
 
 class TaskSet : public Feta {
     
@@ -47,11 +48,10 @@ class TaskSet : public Feta {
     void computeRbf();
     bool isEmpty();
     
-    // Compute the response time for allo the tasks in the taskset based on rbfs
-    // It called by checkSchedulability() in case the task set is schedulable
-    // NB: it is used oncly for offset free tasks
+    // Compute the response time for all the tasks in the taskset based on rbfs
+    // It is called by checkSchedulability() in case the task set is schedulable
+    // NB: it is used only for offset free tasks
     void computeResponseTime();
-    
     
     
 public:
@@ -73,6 +73,8 @@ public:
     
     void add(Feta *);
     void addFunction(Function*);
+        
+    // Add a function to the taskset
     void addFunction(Function*, float);
     void remove(Feta *);
     void removeFunction(Function*);
@@ -97,17 +99,17 @@ public:
     // Returns the response time of a specified runnable
     float getResponseTime(Function* );
     
+    // Returns the response time + offset of a specified runnable
+    float getCompletionTime(Function * );
+    
     // Returns the response time of all tasks
     std::vector<float> getResponseTimes();
     
     // Returns the slacks of each task
     std::vector<float> getSlack();
     
-    // Returns the minimum slack between the slacks of all the tasks
+    // Returns the minimum slack between those of all the tasks
     float getMinSlack();
-    
-    // Return the set of affine tasks of task t
-    std::vector<Task*> getAffineTasks(Task* t);
     
     // Check if a task is allocated on this TaskSet
     bool isMy(Task*);
@@ -138,5 +140,6 @@ public:
     // synchronization
     bool schedTest();
 
+    float getLoad();
 };
 #endif /* defined(__tbd_framework__TaskSet__) */

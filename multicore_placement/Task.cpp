@@ -234,3 +234,10 @@ long Task::getP()
     return p;
 }
 
+float Task::getWcet()
+{
+    float wcet = 0;
+    for (auto f : functions)
+        wcet += f->getFeta(0);
+    return wcet;
+}

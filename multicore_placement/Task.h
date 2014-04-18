@@ -33,7 +33,6 @@ class Task : public Feta{
     long priority;
     std::vector<Function* > functions;
     
-    
     void computeFeta();
     
 public:
@@ -65,6 +64,8 @@ public:
     std::string getName() {return name;}
 
     long getP();
+    
+    float getWcet();
 };
 
 

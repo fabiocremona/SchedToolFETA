@@ -15,6 +15,7 @@
  You should have received a copy of the GNU General Public License
  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 //  File: Feta.cpp
 
 #include "Feta.h"
@@ -49,12 +50,8 @@ Feta::~Feta()
 
 bool Feta::isFiring(long t)
 {
-//    if (t >= offset && ((t-offset) % period) == 0)
-//        return true;
-//    
-    if ( (t - offset) % period == 0  )
+    if ( (t - offset) % period == 0 )
         return true;
-
     else
         return false;
 }
@@ -63,44 +60,13 @@ float Feta::getFeta(long t)
 {
     if (isFiring(t))
     {
-        //std::cout <<"Is firing at: " << t << std::endl;
         long hyperperiod = places.size() * period;
         if (t < offset)
             return float(0);
         else
-        {
-            //std::cout << "FETA value: " << places[long(t / period) % long(hyperperiod / period)] << std::endl;
             return places[long(t / period) % long(hyperperiod / period)];
-            
-        }
     }
     return float(0);
-    
-//    if (isFiring(t))
-//    {
-//        //std::cout << "Is firing at t: " << t << std::endl;
-//        
-//        long hyperperiod = (places.size() - (long)(offset/gcd(period, offset)) ) * period + offset;
-//        long index;
-//        
-//        //std::cout << "Hyperperiod: " << hyperperiod << " Period: " << period << std::endl;
-//        
-//        if (t >= hyperperiod)
-//        {
-//            index = long((t - offset)/period) % long((hyperperiod -offset)/period) + long(offset/gcd(period, offset));
-//            return places[index];
-//        }
-//        else if (t >= offset)
-//        {
-//            //index = long(t / period) % long(hyperperiod / period) + long(offset/gcd(period, offset));
-//            index = long((t - offset)/period) % long((hyperperiod -offset)/period) + long(offset/gcd(period, offset));
-//            //std::cout  << "Index: " << index << std::endl;
-//            return places[index];
-//        }
-//        else
-//            return float(0);
-//    }
-//    return float(0);
 }
 
 long Feta::dstNext(long t)
@@ -181,18 +147,6 @@ const std::vector<float>& Feta::get()
 void Feta::setOffset(float o)
 {
     offset = (long)ceil(o);
-//    long n_locs = 0;
-//    if (offset != 0)
-//        n_locs = (long)(offset/gcd(period, o));
-//    
-//    std::vector<float> tmp_feta;
-//    
-//    for (auto i = 0; i < n_locs; i++)
-//        tmp_feta.push_back(0);
-//    
-//    for (auto loc : places)
-//        tmp_feta.push_back(loc);
-//    places = tmp_feta;
 }
 
 long Feta::getOffset()
