@@ -71,11 +71,9 @@ float Feta::getFeta(long t)
 
 long Feta::dstNext(long t)
 {
-    if (offset > 0)
-    {
-        std::cout << "Error: using dstNext with a task with offset" << std::endl;
-        exit(-1);
-    }
+    if (t < offset)
+        return (offset - t);
+    
     long hyperperiod = places.size() * period;
     int dst = 0;
     for (auto i = (t % hyperperiod) + 1; i <= places.size(); i++)

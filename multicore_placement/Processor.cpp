@@ -1,3 +1,4 @@
+
 /*
  F-Sched: Scheduling, Optimization and Placement of AUTOSAR Runables
  Copyright (C) <2014>  <Fabio Cremona> fabiocremona@gmail.com
@@ -20,6 +21,7 @@
 
 #include "Processor.h"
 #include <algorithm>
+#include <map>
 
 bool sort_density(Task* a, Task* b)
 {
@@ -120,6 +122,110 @@ std::vector<Function*> Processor::getEnabledRunnables()
     return enabled_runnables;
 }
 
+std::vector<Function*> Processor::getAllocatedRunnables()
+{
+    std::vector<Function*> runnables;
+    for (auto core : cores)
+        for (auto task : core->getTs())
+            for (auto function : task->getFunctions())
+                runnables.push_back(function);
+    return runnables;
+}
+
+std::map<Function*, float> Processor::getResponseTimes()
+{
+    std::map<Function*, float> resp_t;
+    auto runnables = getAllocatedRunnables();
+    for (auto r : runnables)
+    {
+        auto core = getCore(r);
+        auto r_t = core->getResponseTime(r);
+        if (r_t > 0)
+            resp_t[r] = r_t;
+        else
+        {
+            std::cout << __FUNCTION__ << " - Response time == -1" << std::endl;
+            exit(-1);
+        }
+    }
+    return resp_t;
+}
+
+bool Processor::checkSchedulability(std::map<Function*, float>& resp_t)
+{
+    for (auto f : resp_t)
+        if (f.second == -1)
+            return false;
+    return true;
+}
+
+std::map<Task*, long> Processor::getOffsets()
+{
+    std::map<Task*, long> offsets;
+    for (auto core : cores)
+        for (auto task : core->getTs())
+            offsets[task] = task->getOffset();
+    return offsets;
+}
+
+std::map<Task*, float> Processor::getNewOffsets()
+{
+    std::map<Task*, float> offsets_t;
+    std::map<Function*, float> respt_f;
+    
+    auto allocated_f = getAllocatedRunnables();
+    
+    for (auto f : allocated_f)
+    {
+        auto c_t = getCore(f)->getCompletionTime(f);
+        if (c_t > 0)
+            respt_f[f] = c_t;
+        else
+        {
+            std::cout << __FUNCTION__ << " - Completion time == -1" << std::endl;
+            exit(-1);
+        }
+    }
+    
+    for (auto c : cores)
+    {
+        for (auto t : c->getTs())
+        {
+            float offset = 0;
+            for (auto f : t->getFunctions())
+            {
+                for (auto p : f->getPredecessors())
+                    if (respt_f[p.first] > offset) offset = respt_f[p.first];
+            }
+            offsets_t[t] = offset;
+        }
+    }
+    
+    return offsets_t;
+}
+
+std::map<Task*, float> Processor::setNewOffsets()
+{
+    auto offsets = getNewOffsets();
+    for (auto t : offsets)
+        t.first->setOffset(t.second);
+    return offsets;
+}
+
+void Processor::setOffsets(std::map<Task*, float> offsets)
+{
+    for (auto t : offsets)
+        t.first->setOffset(t.second);
+}
+
+bool Processor::checkSchedulability()
+{
+    for (auto core : cores)
+        if (core->checkSchedulability() == false)
+            return false;
+    return true;
+}
+
 void Processor::interCoreAllocation(float Ub)
 {
     std::vector<Function*> BL;
@@ -142,94 +248,112 @@ void Processor::interCoreAllocation(float Ub)
         
         std::cout << "Affine cores " << affine_cores.size() << std::endl;
         
-        // Get the response time for all affine runnables
-        std::vector<float> offsets;
-        offsets.clear();
-        offsets.push_back(0);
+        /// --- START --- ///
         
-        // Compute the initial offset for the runnable
+        std::map<Function*, float> resp_times;
+        
+        // Contains the minimum slacks among all the cores for the assignment
+        // of a runnable in a given affine core
+        std::map<TaskSet*, float> slacks;
+        std::map<TaskSet*, std::map<Task*, float> > offsets_c;
+        
         for (auto core : affine_cores)
         {
-            for (auto pred : runnable->getPredecessors())
+            std::cout << "Trying on core: " << (std::find(cores.begin(), cores.end(), core) - cores.begin()) << std::endl;
+            
+            // Take the response times before runnable allocation
+            auto orig_resp_times = getResponseTimes();
+            auto orig_offsets = getOffsets();
+            
+            // Allocate runnable
+            core->addFunction(runnable);
+            
+            // Take response times
+            auto resp_times = orig_resp_times;
+            
+            auto tmp_resp_t = getResponseTimes();
+
+            std::map<Task*, float> offsets;
+            
+            int limit = 0;
+            // Resolve fixed point problem
+            while (tmp_resp_t != resp_times && ++limit < 100)
             {
-                float offset = core->getCompletionTime(pred.first);
+                //std::cout << "Trying to converge" << std::endl;
+                // old response times = current response times
+                resp_times = tmp_resp_t;
                 
-                if (offset > 0)
-                {
-                    std::cout << "Predecessor: " << pred.first->getName() <<
-                    " on core " << getCoreIdx(pred.first) << std::endl;
-                    std::cout << "\tOffset: " << offset << std::endl;
-                    offsets.push_back(offset);
-                }
+                // Set new offsets
+                offsets = setNewOffsets();
                 
-                else if (offset == 0)
-                    continue;
-                else if (offset == -1)
+                // compute new response times
+                tmp_resp_t = getResponseTimes();
+                
+            }
+            
+            if (tmp_resp_t == resp_times)
+            {
+                // Check if the solution is schedulable
+                auto is_sched = checkSchedulability();
+                
+                //            std::cout << "Response times:" << std::endl;
+                //            for (auto r : tmp_resp_t)
+                //                std::cout << r.second << " ";
+                //            std::cout << std::endl;
+                
+                // If the solution is schedulable, store the results (slack)
+                if (is_sched)
                 {
-                    std::cout << "Error: Previous taskset not schedulable" <<
-                    std::endl;
-                    exit(-1);
+                    std::cout << "Slacks: " << std::endl;
+                    std::vector<float> tmp_slacks;
+                    for (auto c : cores)
+                    {
+                        auto slack = c->getMinSlack();
+                        std::cout << slack << " * ";
+                        if (slack > 0)
+                            tmp_slacks.push_back(slack);
+                    }
+                    
+                    // Take the minimum slack among all the cores for the allocation
+                    // of "runnable" in this affine core
+                    slacks[core] = *std::min_element(tmp_slacks.begin(), tmp_slacks.end());
+                    offsets_c[core] = offsets;
                 }
+                std::cout << std::endl;
+                
+                // Remove the assignment and restore the taskset
+                core->removeFunction(runnable);
+            }
+            else
+            {
+                // Remove the assignment and restore the taskset
+                core->removeFunction(runnable);
             }
         }
         
-        float offset = (*std::max_element(offsets.begin(), offsets.end()));
-        long core_idx = offsets.begin() - std::find(offsets.begin(),
-                                                    offsets.end(),
-                                                    offset);
+        std::cout << "Affine schedulable solutions: " << slacks.size() << std::endl;
         
-        
-        // Allocate runnable on all affine cores (tryAssign)
-        std::map<TaskSet*, float> affine_sched_cores;
-        for (auto core : affine_cores)
-        {
-            auto worst_core = affine_cores[core_idx];
-            // In case I am allocating the runnable in the same core of the
-            //  predecessor with the worst response time, I don't need to
-            // allocate with offset
-            if (core == worst_core)
-                core->addFunction(runnable);
-            
-            // Otherwise, allocate with offset
-            else
-                core->addFunction(runnable, offset);
-            
-            // Check the schedulability for the allocated function in each core
-            if(core->checkSchedulability() == true)
-                affine_sched_cores[core] = core->getMinSlack();
-
-            // If the core is not schedulable, remove the assignment
-            else
-                core->removeFunction(runnable);
-        }
-        
-        std::cout << "Affine schedulable cores " << affine_sched_cores.size() << std::endl;
-        //printInternalStats(cores);
-        
-        // If there are schedulable affine solutions
-        //  - take the best allocation
-        //  - remove other assignments
-        if (affine_sched_cores.size() != 0)
+        // If I found schedulable solutions
+        if (slacks.size() != 0)
         {
             // Find the allocation that maximize the minimum slack
-            TaskSet* best_core = affine_sched_cores.begin()->first;
-            for (auto i : affine_sched_cores)
-                if(i.second > affine_sched_cores[best_core]) best_core = i.first;
+            TaskSet* best_core = slacks.begin()->first;
+            for (auto i : slacks)
+                if(i.second > slacks[best_core]) best_core = i.first;
             
+            // Restore the best solution
+            best_core->addFunction(runnable);
+            setOffsets(offsets_c[best_core]);
+
             std::cout << "Runnable " << runnable->getName() << " allocated on core " << std::distance(cores.begin(), std::find(cores.begin(), cores.end(), best_core)) << " with offset: " << best_core->getTask(runnable)->getOffset() << std::endl;
-            
-            // Remove all the allocations except the best
-            for (auto i = cores.begin(); i != cores.end(); i++)
-                if (*i != best_core) (*i)->removeFunction(runnable);
-            
-            
+
             // Eventually remove "runnable" from pbl and bl lists
             auto pbl = std::find(PBL.begin(), PBL.end(), runnable);
             auto bl = std::find(BL.begin(), BL.end(), runnable);
-            
+
             if (pbl != PBL.end())
                 PBL.erase(pbl);
-            
+
             if (bl != BL.end())
                 BL.erase(bl);
             
@@ -237,18 +361,18 @@ void Processor::interCoreAllocation(float Ub)
             NAR.erase(std::find(NAR.begin(), NAR.end(), runnable));
         }
         
-        else if (affine_sched_cores.size() == 0)
+        else if (slacks.size() == 0)
         {
             std::cout << "No schedulable solution for: " << runnable->getName() << std::endl;
             auto pbl = std::find(PBL.begin(), PBL.end(), runnable);
             auto bl = std::find(BL.begin(), BL.end(), runnable);
-            
+
             if (pbl != PBL.end())
             {
                 std::cout << "Unable to find a schedulable solution" << std::endl;
                 exit(-1);
             }
-            
+
             // "runnable" was in the black list, now put it in the post black
             //  list
             else if (bl != BL.end())
@@ -256,25 +380,25 @@ void Processor::interCoreAllocation(float Ub)
                 std::cout << "Try to assign task " << runnable->getName() << " in a non affine Core" << std::endl;
                 PBL.push_back(runnable);
             }
-            
+
             // "runnable" was not in the black list, now put it in the black list
             else
             {
                 //std::cout << "Try with another solution for task " << runnable->getName() << std::endl;
                 BL.push_back(runnable);
             }
-            
+
             // Deallocate the affine set
             auto affine_set = runnable->getPredecessors();
-            
+
             std::cout << "De-allocate the affine set" << std::endl;
             for (auto affine_elem : affine_set)
                 std::cout << " " << affine_elem.first->getName() << std::endl;
-            
+
             for (auto affine_elem : affine_set)
                 for (auto c : cores)
                     c->removeFunction(affine_elem.first);
-            
+
             // Deallocate the current runnable
             for (auto c : affine_cores)
                 c->removeFunction(runnable);
@@ -283,11 +407,26 @@ void Processor::interCoreAllocation(float Ub)
             for (auto t : affine_set)
                 NAR.push_back(t.first);
         }
-        for (auto core : cores)
-            core->checkSchedulability();
-    }
+
+        
+        
+        
+    } // while( NAR.size() != 0 )
 }
 
+        
+        /// --- END --- ///
+        
+        //                                                                           ↖︎
+        //                                                                            |
+        // The following code is commented out because I must compute the offset      |
+        // iteratively from the allocation: the offset deends from the allocation.    |
+        // Moreover, I must change the way I do the allocation: I must try one core   |
+        // at a time and once I measured the slack, before trying with another core   |
+        // I have to remove the allocated runnable on the previous core               |
+        //                                                                            |
+        // The new implementation is proposed here -----------------------------------'
+        
 void Processor::print(std::ostream &stream)
 {
     int i = 0;

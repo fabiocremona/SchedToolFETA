@@ -31,6 +31,7 @@
 #include "Extras.h"
 #include "Processor.h"
 
+class Processor;
 class TaskSet : public Feta {
     
     std::vector<Task* > taskset;
@@ -51,7 +52,7 @@ class TaskSet : public Feta {
     // Compute the response time for all the tasks in the taskset based on rbfs
     // It is called by checkSchedulability() in case the task set is schedulable
     // NB: it is used only for offset free tasks
-    void computeResponseTime();
+    //void computeResponseTime();
     
     
 public:
@@ -76,6 +77,8 @@ public:
         
     // Add a function to the taskset
     void addFunction(Function*, float);
+    
+    float addFunction(Function*, Processor*);
     void remove(Feta *);
     void removeFunction(Function*);
     
@@ -94,7 +97,7 @@ public:
     bool checkSchedulability();
     
     // Compute the response time for taskset with offset
-    float computeResponseTimeO();
+    bool computeResponseTimeO();
     
     // Returns the response time of a specified runnable
     float getResponseTime(Function* );

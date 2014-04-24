@@ -57,7 +57,28 @@ class Processor {
     
     // Print some internal stats
     void printInternalStats(std::vector<TaskSet*>);
-        
+    
+    // Return the list of already allocated runnables
+    std::vector<Function*> getAllocatedRunnables();
+    
+    // Returns the response time for each allocated runnable
+    std::map<Function*, float> getResponseTimes();
+    
+    bool checkSchedulability(std::map<Function*, float>&);
+    
+    bool checkSchedulability();
+    
+    // Returns the offsets of all the tasks in all the tasksets
+    std::map<Task*, long> getOffsets();
+    
+    // Compute the new offsets for all tasks
+    std::map<Task*, float> getNewOffsets();
+    
+    // Set the new offsets
+    std::map<Task*, float> setNewOffsets();
+    
+    void setOffsets(std::map<Task*, float>);
+    
 public:
     
     Processor(std::vector<Task* > , int);

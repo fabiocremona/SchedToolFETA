@@ -20,6 +20,7 @@
 
 #include "TaskSet.h"
 #include <algorithm>
+#include <math.h>
 
 bool tasksort(Task* a, Task* b)
 {
@@ -123,7 +124,6 @@ void TaskSet::computeFeta()
 
         (*i) = wcet;
     }
-    
     computeRbf();
     return;
 }
@@ -160,7 +160,6 @@ void TaskSet::computeRbf()
 float TaskSet::getRbf(long t)
 {
     auto hyperperiod = period * rbf.size();
-    
     if (t < hyperperiod)
     {
         return rbf[t/period];
@@ -207,7 +206,6 @@ std::vector<float> TaskSet::getRbf()
 bool TaskSet::checkSchedulability()
 {
     std::vector<Task* > tmp_tasks;
-    bool is_schedulable = true;
     places.clear();
     
     // rbf is the RBF of the taskset I am checking for schedulability
@@ -216,89 +214,49 @@ bool TaskSet::checkSchedulability()
     // rbfs is the map(rbf, period) of the intermedie schedulability analysis
     //  results
     rbfs.clear();
+    computeFeta();
     
     // Clear response time container and slacks container
     response_t.clear();
     slaks.clear();
     
-    bool with_offset = false;
-    for (auto task : taskset)
-        if (task->getOffset() != 0)
-            with_offset = true;
-    
     std::sort(taskset.begin(), taskset.end(), tasksort);
     
-    if (with_offset == false)
+    for (auto i = taskset.begin(); i != taskset.end(); i++)
     {
-        for (auto i = taskset.begin(); i != taskset.end(); i++)
-        {
-            Task* this_task = (*i);
-            tmp_tasks.push_back(this_task);
-            
-            TaskSet tmp_taskset(tmp_tasks);
-            tmp_taskset.computeFeta();
-            rbf = tmp_taskset.getRbf();
-            
-            std::pair<std::vector<float>, long> rbf2period;
-            rbf2period = std::make_pair(rbf, tmp_taskset.getPeriod());
-            rbfs.push_back(rbf2period);
-            
-            // For offset free tasks, it is enough to check the interval
-            // [0, to the next firing location]
-            is_schedulable = tmp_taskset.checkInterval(0, this_task->dstNext(0));
-            if (!is_schedulable)
-                break;
-        }
+        Task* this_task = (*i);
+        tmp_tasks.push_back(this_task);
         
-        // rbf is the RBF of the TaskSet
-        if (is_schedulable){
-            computeResponseTime();
-            return true;
-        }
+        TaskSet tmp_taskset(tmp_tasks);
+        tmp_taskset.computeFeta();
+        rbf = tmp_taskset.getRbf();
+        period = tmp_taskset.getPeriod();
         
+        std::pair<std::vector<float>, long> rbf2period;
+        rbf2period = std::make_pair(rbf, tmp_taskset.getPeriod());
+        rbfs.push_back(rbf2period);
+        
+        // Check schedulability, compute slacks and response times
+        bool is_sched = tmp_taskset.computeResponseTimeO();
+        
+        // If the schedulability test fails, stop to check and returns false
+        if (is_sched == false)
+            return false;
         else
         {
-            slaks.clear();
-            return false;
+            response_t.push_back(tmp_taskset.getResponseTimes().back());
+            slaks.push_back(tmp_taskset.getMinSlack());
+            //std::cout << "slack: " << tmp_taskset.getMinSlack() << std::endl;
         }
     }
-    
-    else
-    {
-        for (auto i = taskset.begin(); i != taskset.end(); i++)
-        {
-            Task* this_task = (*i);
-            tmp_tasks.push_back(this_task);
-            
-            TaskSet tmp_taskset(tmp_tasks);
-            tmp_taskset.computeFeta();
-            rbf = tmp_taskset.getRbf();
-            
-            std::pair<std::vector<float>, long> rbf2period;
-            rbf2period = std::make_pair(rbf, tmp_taskset.getPeriod());
-            rbfs.push_back(rbf2period);
+    // If schedulability test suceded, return true
+    return true;
 
-            auto resp_t = tmp_taskset.computeResponseTimeO();
-
-            if (resp_t > this_task->getPeriod())
-            {
-                slaks.clear();
-                response_t.clear();
-                return false;
-            }
-            else
-            {
-                slaks.push_back( this_task->getPeriod() - resp_t );
-                response_t.push_back(resp_t);
-            }
-        }
-        return true;
-    }
 }
 
-float TaskSet::computeResponseTimeO()
+bool TaskSet::computeResponseTimeO()
 {
-    //    std::cout << "Task: " << taskset.back()->getName() << std::endl;
+    //std::cout << "Task: " << taskset.back()->getName() << std::endl;
     
     // period: is the period of the FETA
     // this_task->getPeriod(): is the task period
@@ -307,10 +265,13 @@ float TaskSet::computeResponseTimeO()
     
     // Take all the time instants at which the rbf change value
     std::vector<long> time_instants;
-    if (getRbf(0) != 0)
+    if (getRbf(0) != 0 && this_task->getOffset() == 0)
         time_instants.push_back(0);
     
-    for ( auto i = 0; i < ( ( rbf.size() - 1 ) * period ); i += period )
+    if (this_task->getOffset() != 0)
+        time_instants.push_back(this_task->getOffset());
+    
+    for ( auto i = this_task->getOffset(); i < ( ( rbf.size() - 1 ) * period ); i += period )
         if (getRbf(i) != getRbf(i+period))
             time_instants.push_back(i+period);
     
@@ -324,42 +285,75 @@ float TaskSet::computeResponseTimeO()
         // - for successive busy periods, "time" is inizialized to the RBF value
         //      at the beginning of the busy period
         long time = 0;
+        if (this_task->getOffset() != 0)
+            time = getRbf(this_task->getOffset() - period);
+
+        //        std::cout << "time instants:" << std::endl;
+        //        for (auto t : time_instants)
+        //            std::cout << t << " ";
+        //std::cout << std::endl;
+        
         for (auto ti : time_instants)
         {
             // cond is used to check if the intersection between time and RBF
             //  occurs for a given busy period
             bool cond = false;
-            
+            //std::cout << "TI: " << ti << std::endl;
             // Check for each busy period if there is the intersection between
             //  time and RBF
-            for (auto i = ti; i <= ( ti + this_task->getPeriod() ); i+=period)
+            //std::cout << "ti: " << ti << " this task dst: " << this_task->dstNext(ti) << std::endl;
+            for (auto i = ti; i <= ( ti + this_task->dstNext(ti) ); i+=period)
             {
+                
                 time += period;
                 
                 // "intersection" is the absolute time at which the intersection
                 //  between time and RBF occurs
                 float intersection = 0;
+                
+                //std::cout << "ti: " << ti << ", Rbf(" << i << "): " << getRbf(i) << ", time-period: " << time - period <<  ", Rbf(" << i << "): " <<  getRbf(i) << ", time: " << time << std::endl;
+                
                 if ( getRbf(i) > (time-period) && getRbf(i) <= time )
                 {
-                    cond = true;
                     
+                    cond = true;
                     if (ti != 0)
-                        intersection = ti + ( getRbf(i) - getRbf(ti-period) );
+                    {
+                        if (getRbf(i) == time)
+                            intersection = ti + ( getRbf(i) - getRbf(ti-period) );
+                        else if (getRbf(i) < time)
+                            intersection = ti + ( getRbf(i-period) - getRbf(ti-period) );
+                    }
                     else
                         intersection = getRbf(i);
                     
+                    
+                    //                    std::cout << "Intersection, ti: " << ti << ", Rbf(" << i-period << "): " << getRbf(i-period) <<
+                    //                    ", Rbf(" << ti-period << "): " << getRbf(ti-period) << " -> " << intersection << std::endl;
+                    
                     // "t" is the absolute time instant of the last activation
                     //  of task "this_task" (the task at lower priority"
-                    long t = (long)((intersection - this_task->getOffset() - period)
-                                    /this_task->getPeriod());
+                    // (intersection - this_task->getOffset()-period
+                    long t = (long)((intersection - this_task->getOffset()) /
+                                    this_task->getPeriod());
+                    
                     t = t * this_task->getPeriod() + this_task->getOffset();
+                    
+                    if (t - this_task->getPeriod() >= ti)
+                        t -= this_task->getPeriod();
+                    
+                    
                     
                     // The busy period is relevant only if "t" is inside the
                     //  busy period itself
                     if (t >= ti)
+                    {
                         interm_resp_t.push_back(intersection - t);
-                    
-                    
+                        //td::cout << "t: " << t << " dst: " << ti + this_task->dstNext(ti) << " respt: " << intersection << std::endl;
+                        //slaks.push_back(this_task->dstNext(ti) -
+                        //                (intersection - t));
+                        slaks.push_back( (ti + this_task->dstNext(ti)) - intersection);
+                    }
                     // If there has been the intersection stop to search
                     break;
                 }
@@ -368,49 +362,45 @@ float TaskSet::computeResponseTimeO()
             // If I did not find the intersection and if the "time - ti" has
             //  evolved above the "this_task->getPeriod()", add a response
             //  time > "this_task->getPeriod()"
-            if (cond == false && (time - ti) >= this_task->getPeriod())
-                interm_resp_t.push_back(rbf.size() * period);
+            if (cond == false && (time - ti) > this_task->dstNext(ti))
+            {
+                //std::cout << "here\n";
+                //interm_resp_t.push_back(rbf.size() * period);
+                return false;
+            }
+            // ^
+            // |-- basically if I did not fount the intersection, it means that
+            //      the tasket is not schedulable
             
             time = getRbf(ti);
             cond = false;
         }
     }
     
-    //    std::cout << "Response times: ";
-    //    for (auto t : interm_resp_t)
-    //        std::cout << t << " ";
-    //    std::cout << std::endl;
+//    std::cout << "Response times: ";
+//    for (auto t : interm_resp_t)
+//        std::cout << t << " ";
+//    std::cout << std::endl;
     
     // If no response time have bee found, the task set is unschedulable
     //  and a mock response time is returned
+    // This means that I found intersections but not for "this_task"
     if (interm_resp_t.size() == 0)
-        return (period * rbf.size() + 1);
-
-    // Return the worst response time found
-    else
-        return *std::max_element(interm_resp_t.begin(), interm_resp_t.end());
-}
-
-void TaskSet::computeResponseTime()
-{
-    if (taskset.size() == 0) return;
-    for (auto r : rbfs)
     {
-        auto idx = std::distance(rbfs.begin(), std::find(rbfs.begin(), rbfs.end(), r));
-        long p = r.second;
-        auto f = r.first;
-        bool condition = true;
-        for (auto i = f.begin(); i != f.end(); i++)
-        {
-            auto s = (i - f.begin()) * p;
-            auto e = s + p;
-            if (s <= *i && e >= *i && condition)
-            {
-                response_t.push_back(*i);
-                slaks.push_back(taskset.at(idx)->getPeriod() - *i);
-                condition = false;
-            }
-        }
+        //std::cout << "not here\n";
+        return false;
+    }
+    else
+    {
+        auto wcrt = *std::max_element(interm_resp_t.begin(),
+                                      interm_resp_t.end());
+        
+        response_t.push_back(wcrt);
+        return true;
+//        if (wcrt > this_task->getPeriod())
+//            return false;
+//        else
+//            return true;
     }
 }
 
@@ -474,7 +464,7 @@ float TaskSet::getCompletionTime(Function * f)
     if (task != nullptr)
         return ( getResponseTime(f) + getTask(f)->getOffset() );
     else
-        return 0;
+        return -1;
 }
 
 std::vector<float> TaskSet::getSlack()
@@ -484,6 +474,9 @@ std::vector<float> TaskSet::getSlack()
 
 float TaskSet::getMinSlack()
 {
+    if (taskset.size() == 0)
+        return -1;
+        
     auto tmp_slack = slaks;
     std::sort(tmp_slack.begin(), tmp_slack.end());
     return tmp_slack.front();
@@ -627,7 +620,7 @@ void TaskSet::addFunction(Function *f, float offset)
 {
     bool allocated = false;
     
-    // If already exist a task running at at the same period of function "f"
+    // If already exist a task running at the same period of function "f"
     //  add f to this task
     for (auto task : taskset)
     {
@@ -695,6 +688,81 @@ void TaskSet::addFunction(Function *f, float offset)
             period = gcd(period, (*i)->getPeriod());
     
     std::sort(taskset.begin(), taskset.end(), tasksort);
+}
+
+float TaskSet::addFunction(Function *f, Processor* p)
+{
+    bool allocated = false;
+    
+    // If already exist a task running at the same period of function "f"
+    //  add f to this task
+    for (auto task : taskset)
+    {
+        if (task->getPeriod() == f->getPeriod())
+        {
+            task->add(f);
+            
+            // Change the offset of the task if the previous offset is smaller
+            //  than the new one
+            if (task->getOffset() < offset)
+                task->setOffset(offset);
+            
+            allocated = true;
+        }
+    }
+    
+    // The runnable has not been allocated on previous tasks and a new task
+    //  must be created for it
+    if (allocated == false)
+    {
+        // Decrease priority of tasks with higher period
+        for (auto task : taskset)
+            if (task->getPeriod() > f->getPeriod())
+                task->changePriority(task->getPriority() + 1);
+        
+        // Create the new task
+        Task* new_task = new Task();
+        new_task->add(f);
+        taskset.push_back(new_task);
+        
+        // Set the offset for the new task
+        new_task->setOffset(offset);
+        
+        // Re-assign priorities
+        // Get tasks with lower period
+        for (auto task : taskset)
+            if (task->getPeriod() > f->getPeriod())
+                task->changePriority(task->getPriority() + 1);
+        
+        std::vector<long> priorities;
+        for (auto task : taskset)
+            if (task->getPeriod() < f->getPeriod())
+                priorities.push_back(task->getPriority());
+        
+        if (priorities.size() == 0)
+            priorities.push_back(0);
+        
+        auto priority = (*(std::max_element(priorities.begin(), priorities.end()))) + 1;
+        
+        // Set the priority of the new task
+        new_task->changePriority(priority);
+    }
+    
+    // Compute Period
+    for (auto task : taskset)
+    {
+        if (task->getFunSize())
+        {
+            period = task->getPeriod();
+            break;
+        }
+    }
+	for (auto i = taskset.begin(); i != taskset.end(); i++)
+        if ((*i)->getFunSize())
+            period = gcd(period, (*i)->getPeriod());
+    
+    std::sort(taskset.begin(), taskset.end(), tasksort);
+    return 0;
 }
 
 void TaskSet::removeFunction(Function *f)
