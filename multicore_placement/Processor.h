@@ -79,6 +79,9 @@ class Processor {
     
     void setOffsets(std::map<Task*, float>);
     
+    // Returns the set of cores which contains at list one task
+    std::vector<TaskSet*> getAllocCores();
+    
 public:
     
     Processor(std::vector<Task* > , int);

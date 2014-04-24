@@ -204,6 +204,16 @@ std::map<Task*, float> Processor::getNewOffsets()
     return offsets_t;
 }
 
+std::vector<TaskSet*> Processor::getAllocCores()
+{
+    std::vector<TaskSet*> alloc_cores;
+    for (auto core : cores)
+        if (core->getTs().size() != 0)
+            alloc_cores.push_back(core);
+    return alloc_cores;
+}
+
+
 std::map<Task*, float> Processor::setNewOffsets()
 {
     auto offsets = getNewOffsets();
@@ -220,7 +230,8 @@ void Processor::setOffsets(std::map<Task*, float> offsets)
 
 bool Processor::checkSchedulability()
 {
-    for (auto core : cores)
+    auto alloc_cores = getAllocCores();
+    for (auto core : alloc_cores)
         if (core->checkSchedulability() == false)
             return false;
     return true;
@@ -248,8 +259,6 @@ void Processor::interCoreAllocation(float Ub)
         
         std::cout << "Affine cores " << affine_cores.size() << std::endl;
         
-        /// --- START --- ///
-        
         std::map<Function*, float> resp_times;
         
         // Contains the minimum slacks among all the cores for the assignment
@@ -259,7 +268,9 @@ void Processor::interCoreAllocation(float Ub)
         
         for (auto core : affine_cores)
         {
-            std::cout << "Trying on core: " << (std::find(cores.begin(), cores.end(), core) - cores.begin()) << std::endl;
+            std::cout << "Trying on core: " <<
+                (std::find(cores.begin(), cores.end(), core) - cores.begin()) <<
+                std::endl;
             
             // Take the response times before runnable allocation
             auto orig_resp_times = getResponseTimes();
@@ -271,12 +282,17 @@ void Processor::interCoreAllocation(float Ub)
             // Take response times
             auto resp_times = orig_resp_times;
             
+            // Take the new response times
             auto tmp_resp_t = getResponseTimes();
+            
+            // Add the response time of the new runnable to "resp_times"
+            resp_times[runnable] = tmp_resp_t[runnable];
 
+            // The offsets
             std::map<Task*, float> offsets;
             
-            int limit = 0;
             // Resolve fixed point problem
+            int limit = 0;
             while (tmp_resp_t != resp_times && ++limit < 100)
             {
                 //std::cout << "Trying to converge" << std::endl;
@@ -304,14 +320,19 @@ void Processor::interCoreAllocation(float Ub)
                 // If the solution is schedulable, store the results (slack)
                 if (is_sched)
                 {
-                    std::cout << "Slacks: " << std::endl;
                     std::vector<float> tmp_slacks;
-                    for (auto c : cores)
+                    auto alloc_cores = getAllocCores();
+                    for (auto c : alloc_cores)
                     {
                         auto slack = c->getMinSlack();
-                        std::cout << slack << " * ";
-                        if (slack > 0)
+                        if (slack >= 0)
                             tmp_slacks.push_back(slack);
+                        else
+                        {
+                            std::cout << "ERROR: negative slack with schedulable solution" << std::endl;
+                            std::cout << runnable->getName() << ", slack: " << slack << std::endl;
+                            exit(-1);
+                        }
                     }
                     
                     // Take the minimum slack among all the cores for the allocation
@@ -408,24 +429,8 @@ void Processor::interCoreAllocation(float Ub)
                 NAR.push_back(t.first);
         }
 
-        
-        
-        
     } // while( NAR.size() != 0 )
 }
-
-        
-        /// --- END --- ///
-        
-        //                                                                           ↖︎
-        //                                                                            |
-        // The following code is commented out because I must compute the offset      |
-        // iteratively from the allocation: the offset deends from the allocation.    |
-        // Moreover, I must change the way I do the allocation: I must try one core   |
-        // at a time and once I measured the slack, before trying with another core   |
-        // I have to remove the allocated runnable on the previous core               |
-        //                                                                            |
-        // The new implementation is proposed here -----------------------------------'
         
 void Processor::print(std::ostream &stream)
 {

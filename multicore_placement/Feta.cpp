@@ -71,19 +71,10 @@ float Feta::getFeta(long t)
 
 long Feta::dstNext(long t)
 {
-    if (t < offset)
-        return (offset - t);
-    
-    long hyperperiod = places.size() * period;
-    int dst = 0;
-    for (auto i = (t % hyperperiod) + 1; i <= places.size(); i++)
-    {
-        dst++;
-        if (isFiring(i * period) && getFeta(i * period))
-            return (dst * period);
-        
-    }    
-    return (++dst) * period;
+    long T = t + 1;
+    while (!isFiring(T) && !getFeta(T))
+        T += 1;
+    return T-t;
 }
 
 long Feta::getPeriod()

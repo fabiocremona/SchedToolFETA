@@ -35,7 +35,7 @@ int main( int argc, const char*   argv[] )
     ofstream output;
     output.open("test_0_results.txt");
     //srand(unsigned(time(NULL)*99999999999999));
-Parser ps0("/Users/fabiocremona/Documents/SSSA-PhD/Works/FETA/multicore_placement/multicore_placement/test_1.txt", "3");
+Parser ps0("/Users/fabiocremona/Documents/SSSA-PhD/Works/FETA/multicore_placement/multicore_placement/test_3.txt", "4");
     ps0.create();
     TaskSet ts0(*ps0.getRMTS());
     
