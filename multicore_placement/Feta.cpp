@@ -72,7 +72,7 @@ float Feta::getFeta(long t)
 long Feta::dstNext(long t)
 {
     long T = t + 1;
-    while (!isFiring(T) && !getFeta(T))
+    while (getFeta(T) == 0)
         T += 1;
     return T-t;
 }

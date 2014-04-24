@@ -256,12 +256,25 @@ bool TaskSet::checkSchedulability()
 
 bool TaskSet::computeResponseTimeO()
 {
-    //std::cout << "Task: " << taskset.back()->getName() << std::endl;
+    std::cout << std::endl << "Task: " << taskset.back()->getName() << std::endl;
     
     // period: is the period of the FETA
     // this_task->getPeriod(): is the task period
     
     auto this_task = taskset.back();
+    
+    std::cout << "RBF: ";
+    for (auto r : rbf)
+        std::cout << r << " ";
+    std::cout << std::endl;
+    std::cout << "TASK feta: ";
+    for (auto r : this_task->get())
+        std::cout << r << " ";
+    std::cout << std::endl;
+    
+    
+    std::cout << "period: " << period << ", this_task->getPeriod(): " <<
+    this_task->getPeriod() << std::endl;
     
     // Take all the time instants at which the rbf change value
     std::vector<long> time_instants;
@@ -288,31 +301,47 @@ bool TaskSet::computeResponseTimeO()
         // - for successive busy periods, "time" is inizialized to the RBF value
         //      at the beginning of the busy period
         float time = 0;
-        float poppo = 0;
         if (this_task->getOffset() != 0)
             time = getRbf(this_task->getOffset() - period);
+
         
         for (auto ti : time_instants)
         {
-            // cond is used to check if the intersection between time and RBF
-            //  occurs for a given busy period
-            bool cond = false;
-            
+            //auto E = rbf.size() * period;
+            std::cout << "ti: " << ti << std::endl;
             // Check for each busy period if there is the intersection between
             //  time and RBF
             
-            for (auto i = ti; i <= ( ti + this_task->dstNext(ti) ); i+=period)
+            
+            long t = floor( (ti - this_task->getOffset()) / this_task->getPeriod() );
+            t = t * this_task->getPeriod() + this_task->getOffset();
+            if (t < ti)
+                t += this_task->getPeriod();
+            
+            auto D = ti + (t - ti) + this_task->dstNext(t);
+            
+            // D = (ti + E), decommentare E sopra
+            for (auto i = ti; i <= D; i+=period)
             {
+                std::cout << "i: " << i << std::endl;
                 time += period;
                 
-                // "intersection" is the absolute time at which the intersection
-                //  between time and RBF occurs
                 float intersection = 0;
+                bool found = false;
+                
+                std::cout << "---getRbf(i): " << getRbf(i) <<
+                ", (time-period): " << (time-period) << ", time: " << time
+                << std::endl;
                 
                 if ( getRbf(i) > (time-period) && getRbf(i) <= time )
                 {
                     
-                    cond = true;
+                    std::cout << "+++getRbf(i): " << getRbf(i) <<
+                    ", (time-period): " << (time-period) << ", time: " << time
+                    << std::endl;
+                    
+                    found = true;
+                    
                     if (ti != 0)
                     {
                         intersection = ti + ( getRbf(i) - getRbf(ti-period) );
@@ -321,60 +350,112 @@ bool TaskSet::computeResponseTimeO()
                     {
                         intersection = getRbf(i);
                     }
-                    
-                    // "t" is the absolute time instant of the last activation
-                    //  of task "this_task" (the task at lower priority"
-                    long t = (long)((intersection - this_task->getOffset()) /
-                                    this_task->getPeriod());
-                    
-                    t = t * this_task->getPeriod() + this_task->getOffset();
-                    
-                    while (t - this_task->getPeriod() >= ti)
-                        t -= this_task->getPeriod();
+
+                    std::cout << "t: " << t << ", D: " << D << std::endl;
                     
                     // The busy period is relevant only if "t" is inside the
-                    //  busy period itself (ti - ti+dst(ti))
-                    if (t >= ti)
+                    //  busy period itself
+                    if (intersection <= D && t >= ti && t <= intersection)
                     {
-                        interm_resp_t.push_back(intersection - t);
-                        slaks.push_back( (t + this_task->dstNext(t)) - intersection);
+                        std::cout << "Intersection: " << intersection <<
+                        ", resp_time: " << intersection - t << ", slack: " <<
+                        D - intersection << std::endl;
+                        
+                        interm_resp_t.push_back( intersection - t );
+                        slaks.push_back( D - intersection );
+                        
+                        if ( ( D - intersection ) < 0 )
+                        {
+                            std::cout << "ERROR, negative slack" << std::endl;
+                            
+                            std::cout << std::endl << "Task: " <<
+                            taskset.back()->getName() << std::endl;
+                            
+                            std::cout << "period: " << period <<
+                            ", this_task->getPeriod(): " <<
+                            this_task->getPeriod() << std::endl;
+                            
+                            std::cout << "RBF: ";
+                            for (auto r : rbf)
+                                std::cout << r << " ";
+                            std::cout << std::endl;
+                            
+                            std::cout << "TASK feta: ";
+                            for (auto r : this_task->get())
+                                std::cout << r << " ";
+                            std::cout << std::endl;
+                            
+                            std::cout << "ti: " << ti << std::endl;
+                            std::cout << "t: " << t << ", D: " << D << std::endl;
+                            
+                            std::cout << "getRbf(i): " << getRbf(i) <<
+                            ", (time-period): " << (time-period) << ", time: "
+                            << time << std::endl;
+                            
+                            std::cout << "Intersection: " << intersection <<
+                            ", resp_time: " << intersection - t << ", slack: "
+                            << D - intersection << std::endl;
+                            
+                            exit(-1);
+                        }
+                        
+                        if ( (intersection - t ) <= 0 )
+                        {
+                            std::cout << "ERROR, negative respt" << std::endl;
+                            
+                            std::cout << std::endl << "Task: " <<
+                            taskset.back()->getName() << std::endl;
+                            
+                            std::cout << "period: " << period <<
+                            ", this_task->getPeriod(): " <<
+                            this_task->getPeriod() << std::endl;
+                            
+                            std::cout << "RBF: ";
+                            for (auto r : rbf)
+                                std::cout << r << " ";
+                            std::cout << std::endl;
+                            
+                            std::cout << "TASK feta: ";
+                            for (auto r : this_task->get())
+                                std::cout << r << " ";
+                            std::cout << std::endl;
+
+                            std::cout << "ti: " << ti << std::endl;
+                            std::cout << "t: " << t << ", D: " << D << std::endl;
+                            
+                            std::cout << "getRbf(i): " << getRbf(i) <<
+                            ", (time-period): " << (time-period) << ", time: "
+                            << time << std::endl;
+                            
+                            std::cout << "Intersection: " << intersection <<
+                            ", resp_time: " << intersection - t << ", slack: "
+                            << D - intersection << std::endl;
+                            
+                            exit(-1);
+                        }
+                        
                     }
-                    // If there has been the intersection stop to search
+                    else if (intersection > D && t >= ti)
+                    {
+                        //std::cout << "==> intersection > D && t >= ti" << std::endl;
+                        return false;
+                    }
                     break;
                 }
+                if (found == false && time > D)
+                {
+                    //std::cout << "==> found = false" << std::endl;
+                    return false;
+                }
             }
-            
-            // If I did not find the intersection and if the "time - ti" has
-            //  evolved above the "this_task->getPeriod()", add a response
-            //  time > "this_task->getPeriod()"
-            if (cond == false && (time - ti) > this_task->dstNext(ti))
-                return false;
-            
             time = getRbf(ti);
-            poppo = time;
-            cond = false;
         }
     }
     
-//    std::cout << "Response times: ";
-//    for (auto t : interm_resp_t)
-//        std::cout << t << " ";
-//    std::cout << std::endl;
-    
-    // If no response time have bee found, the task set is unschedulable
-    //  and a mock response time is returned
-    // This means that I found intersections but not for "this_task"
-    if (interm_resp_t.size() == 0)
-        return false;
-    
-    else
-    {
-        auto wcrt = *std::max_element(interm_resp_t.begin(),
-                                      interm_resp_t.end());
-        
-        response_t.push_back(wcrt);
-        return true;
-    }
+    auto wcrt = *std::max_element(interm_resp_t.begin(),
+                                  interm_resp_t.end());
+    response_t.push_back(wcrt);
+    return true;
 }
 
 std::vector<float> TaskSet::getResponseTimes()
@@ -399,7 +480,10 @@ float TaskSet::getResponseTime(Function *f)
     
     // I did't find the function in the taskset
     if (the_task == nullptr)
-        return 0;
+    {
+        std::cout << "ERROR: runnable not in the taskset" << std::endl;
+        exit(-1);
+    }
     
     // Add to the TaskSet all the tasks at higher priority than "the_task"
     auto the_priority = the_task->getPriority();

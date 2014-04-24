@@ -142,7 +142,7 @@ std::map<Function*, float> Processor::getResponseTimes()
         auto r_t = core->getResponseTime(r);
         if (r_t > 0)
             resp_t[r] = r_t;
-        else
+        else if (r_t == -1)
         {
             std::cout << __FUNCTION__ << " - Response time == -1" << std::endl;
             exit(-1);
