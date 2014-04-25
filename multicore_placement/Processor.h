@@ -23,6 +23,7 @@
 
 #include <iostream>
 #include <vector>
+#include <map>
 
 #include "Task.h"
 #include "TaskSet.h"
@@ -71,7 +72,8 @@ class Processor {
     // Returns the offsets of all the tasks in all the tasksets
     std::map<Task*, long> getOffsets();
     
-    // Compute the new offsets for all tasks
+    // Compute the offsets for all tasks with respect to the allocated
+    // runnables
     std::map<Task*, float> getNewOffsets();
     
     // Set the new offsets
@@ -81,6 +83,9 @@ class Processor {
     
     // Returns the set of cores which contains at list one task
     std::vector<TaskSet*> getAllocCores();
+    
+    // Returns the offset for a given runnable
+    std::pair<TaskSet*, float> getOffset(Function*);
     
 public:
     

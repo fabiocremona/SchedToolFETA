@@ -49,6 +49,8 @@ class TaskSet : public Feta {
     void computeRbf();
     bool isEmpty();
     
+    std::map<Function*, long> offsets;
+    
     // Compute the response time for all the tasks in the taskset based on rbfs
     // It is called by checkSchedulability() in case the task set is schedulable
     // NB: it is used only for offset free tasks

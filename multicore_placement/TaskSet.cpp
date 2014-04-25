@@ -256,13 +256,15 @@ bool TaskSet::checkSchedulability()
 
 bool TaskSet::computeResponseTimeO()
 {
-    std::cout << std::endl << "Task: " << taskset.back()->getName() << std::endl;
+    
     
     // period: is the period of the FETA
     // this_task->getPeriod(): is the task period
     
     auto this_task = taskset.back();
     
+#ifdef DEBUG_RT
+    std::cout << std::endl << "Task: " << taskset.back()->getName() << std::endl;
     std::cout << "RBF: ";
     for (auto r : rbf)
         std::cout << r << " ";
@@ -271,10 +273,11 @@ bool TaskSet::computeResponseTimeO()
     for (auto r : this_task->get())
         std::cout << r << " ";
     std::cout << std::endl;
-    
-    
     std::cout << "period: " << period << ", this_task->getPeriod(): " <<
     this_task->getPeriod() << std::endl;
+#endif
+    
+    
     
     // Take all the time instants at which the rbf change value
     std::vector<long> time_instants;
@@ -307,8 +310,10 @@ bool TaskSet::computeResponseTimeO()
         
         for (auto ti : time_instants)
         {
-            //auto E = rbf.size() * period;
+#ifdef DEBUG_RT
             std::cout << "ti: " << ti << std::endl;
+#endif
+            
             // Check for each busy period if there is the intersection between
             //  time and RBF
             
@@ -320,26 +325,26 @@ bool TaskSet::computeResponseTimeO()
             
             auto D = ti + (t - ti) + this_task->dstNext(t);
             
-            // D = (ti + E), decommentare E sopra
             for (auto i = ti; i <= D; i+=period)
             {
-                std::cout << "i: " << i << std::endl;
+                
                 time += period;
                 
                 float intersection = 0;
                 bool found = false;
-                
+#ifdef DEBUG_RT
+                std::cout << "i: " << i << std::endl;
                 std::cout << "---getRbf(i): " << getRbf(i) <<
                 ", (time-period): " << (time-period) << ", time: " << time
                 << std::endl;
-                
+#endif
                 if ( getRbf(i) > (time-period) && getRbf(i) <= time )
                 {
-                    
+#ifdef DEBUG_RT
                     std::cout << "+++getRbf(i): " << getRbf(i) <<
                     ", (time-period): " << (time-period) << ", time: " << time
                     << std::endl;
-                    
+#endif
                     found = true;
                     
                     if (ti != 0)
@@ -350,20 +355,23 @@ bool TaskSet::computeResponseTimeO()
                     {
                         intersection = getRbf(i);
                     }
-
+#ifdef DEBUG_RT
                     std::cout << "t: " << t << ", D: " << D << std::endl;
-                    
+#endif
                     // The busy period is relevant only if "t" is inside the
                     //  busy period itself
-                    if (intersection <= D && t >= ti && t <= intersection)
+                    if (intersection <= D && t >= ti && t < intersection)
                     {
+#ifdef DEBUG_RT
                         std::cout << "Intersection: " << intersection <<
                         ", resp_time: " << intersection - t << ", slack: " <<
                         D - intersection << std::endl;
-                        
+#endif
                         interm_resp_t.push_back( intersection - t );
                         slaks.push_back( D - intersection );
                         
+                        // If negative slack (at this point the slack cannot be
+                        // negative)
                         if ( ( D - intersection ) < 0 )
                         {
                             std::cout << "ERROR, negative slack" << std::endl;
@@ -399,6 +407,8 @@ bool TaskSet::computeResponseTimeO()
                             exit(-1);
                         }
                         
+                        // If negative response time (at this point the response
+                        // time cannot be negative)
                         if ( (intersection - t ) <= 0 )
                         {
                             std::cout << "ERROR, negative respt" << std::endl;
@@ -435,9 +445,9 @@ bool TaskSet::computeResponseTimeO()
                         }
                         
                     }
-                    else if (intersection > D && t >= ti)
+                    else if (intersection > D && t > ti)
                     {
-                        //std::cout << "==> intersection > D && t >= ti" << std::endl;
+                        //std::cout << "==> intersection > D && t > ti" << std::endl;
                         return false;
                     }
                     break;
@@ -824,14 +834,25 @@ float TaskSet::addFunction(Function *f, Processor* p)
 
 void TaskSet::removeFunction(Function *f)
 {
+    bool erased = false;
     for (auto task : taskset)
-        if (task->removeC(f))
+    {
+        if (task->removeC(f) == true)
+        {
+            erased = true;
             if (task->getFunSize() == 0)
             {
                 taskset.erase(std::find(taskset.begin(), taskset.end(), task));
                 delete task;
             }
-    
+        }
+    }
+    if (erased == false)
+    {
+        std::cout << "ERROR:, runnable " << f->getName() << " not allocated "
+        << "in this taskset" << std::endl;
+        exit(-1);
+    }
     // Re-assign priorities
     std::sort(taskset.begin(), taskset.end(), tasksort);
     long p = 1;

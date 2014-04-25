@@ -13,7 +13,7 @@ LD = g++
 EXECS = scmr
 
 
-SRCS = main.cpp Component.cpp Parser.cpp Function.cpp Task.cpp Extras.cpp TaskSet.cpp Feta.cpp RtwOpt.cpp Block.cpp
+SRCS = main.cpp Component.cpp Parser.cpp Function.cpp Task.cpp Extras.cpp TaskSet.cpp Feta.cpp RtwOpt.cpp Block.cpp Processor.cpp
 
 OBJS = ${SRCS:.cpp=.o}
 
