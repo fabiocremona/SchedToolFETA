@@ -29,7 +29,7 @@ Function::Function(std::string n)
     name = n;
     Block* block;
     // Generate the FETA
-    int n_loc = (int)(2 + ((float)rand() / (float)RAND_MAX) * N_BLOC);
+    int n_loc = (int)(1 + ((float)rand() / (float)RAND_MAX) * N_BLOC);
     
     for (auto i = 0; i < n_loc; ++i)
     {

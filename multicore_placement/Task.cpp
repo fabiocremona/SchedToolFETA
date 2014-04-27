@@ -73,10 +73,10 @@ void Task::computeFeta()
         places.push_back(0);
     
     
-    if (offset != 0)
-        period = gcd(period, offset);
-    for (auto i = 0; i < (offset/period); i++)
-        places.push_back(0);
+//    if (offset != 0)
+//        period = gcd(period, offset);
+//    for (auto i = 0; i < (offset/period); i++)
+//        places.push_back(0);
     
     for (auto i = places.begin(); i != places.end(); i++)
     {
@@ -184,7 +184,8 @@ void Task::changePriority(long p)
 void Task::print(std::ostream &stream)
 {
     stream << "TASK: " << name << std::endl;
-    stream << " - Priority: " << priority << " - Period: " << period << std::endl;
+    stream << " - Priority: " << priority << " - Period: " << period
+    << " - Offset: " << offset << std::endl;
     stream << " - ";
     for (auto i = places.begin(); i != places.end(); i++)
         stream << "[" << (*i) << "] ";
@@ -195,7 +196,8 @@ void Task::print(std::ostream &stream)
 void Task::printExt(std::ostream &stream)
 {
     stream << "TASK: " << name << std::endl;
-    stream << " - Priority: " << priority << " - Period: " << period << std::endl;
+    stream << " - Priority: " << priority << " - Period: " << period
+    << " - Offset: " << offset << std::endl;
     stream << " - ";
     for (auto i = places.begin(); i != places.end(); i++)
         stream << "[" << (*i) << "] ";

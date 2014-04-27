@@ -35,26 +35,14 @@ int main( int argc, const char*   argv[] )
     ofstream output;
     output.open("test_0_results.txt");
     //srand(unsigned(time(NULL)*99999999999999));
-Parser ps0("/Users/fabiocremona/Documents/SSSA-PhD/Works/FETA/multicore_placement/multicore_placement/test_1.txt", "4");
+Parser ps0("/Users/fabiocremona/Documents/SSSA-PhD/Works/FETA/multicore_placement/multicore_placement/test_1.txt", "5");
     ps0.create();
     TaskSet ts0(*ps0.getRMTS());
     
-//    auto is_schedulable = ts0.checkSchedulability();
-//    if (!is_schedulable) {
-//        std::cout << "The task set is not schedulable" << std::endl;
-//        exit(-1);
-//    }
     
-//    RtwOpt opt0(ts0);
-    //ts0.printTs(std::cout);
-//    auto ts1 = opt0.optimize();
-    //ts1.printTs(std::cout);
-    
-    ts0.printTsExt(std::cout);
-    std::cout << std::endl;
-    
-    Processor p0(ts0.getTs(), 5);
-    p0.interCoreAllocation(0.8);
+    Processor p0(ts0.getTs(), 9);
+    p0.interCoreAllocation(0.9);
+
     p0.print(std::cout);
     
     std::cout << "End" << std::endl;

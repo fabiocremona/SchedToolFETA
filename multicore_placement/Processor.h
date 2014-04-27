@@ -79,7 +79,7 @@ class Processor {
     // Set the new offsets
     std::map<Task*, float> setNewOffsets();
     
-    void setOffsets(std::map<Task*, float>);
+    void setOffsets(std::map<Function*, float>);
     
     // Returns the set of cores which contains at list one task
     std::vector<TaskSet*> getAllocCores();

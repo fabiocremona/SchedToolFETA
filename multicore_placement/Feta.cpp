@@ -60,11 +60,13 @@ float Feta::getFeta(long t)
 {
     if (isFiring(t))
     {
-        long hyperperiod = places.size() * period;
         if (t < offset)
             return float(0);
         else
-            return places[long(t / period) % long(hyperperiod / period)];
+        {
+            t -= offset;
+            return places[long(t / period) % places.size()];
+        }
     }
     return float(0);
 }

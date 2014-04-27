@@ -35,27 +35,17 @@ class Processor;
 class TaskSet : public Feta {
     
     std::vector<Task* > taskset;
-    std::vector<float> rbf;
-    
+    std::vector<float> rbf;    
     std::vector<std::pair<std::vector<float>, long>> rbfs;
     std::vector<float> response_t;
     std::vector<float> slaks;
-    
     long total_size;
     long rt2_size;
     long rt1_size;
-    
     bool checkInterval(long, long);
     void computeRbf();
     bool isEmpty();
-    
     std::map<Function*, long> offsets;
-    
-    // Compute the response time for all the tasks in the taskset based on rbfs
-    // It is called by checkSchedulability() in case the task set is schedulable
-    // NB: it is used only for offset free tasks
-    //void computeResponseTime();
-    
     
 public:
     

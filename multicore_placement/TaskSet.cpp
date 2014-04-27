@@ -22,6 +22,9 @@
 #include <algorithm>
 #include <math.h>
 
+//#define DEBUG_RT
+
+
 bool tasksort(Task* a, Task* b)
 {
     return ((a)->getPriority() < ((b)->getPriority()));
@@ -143,33 +146,15 @@ void TaskSet::computeRbf()
                 rbf.push_back(rbf.back() + value);
         }
     }
-    //    std::cout << "RBF: " << std::endl;
-    //    for (auto r : rbf)
-    //        std::cout << r << " ";
-    //    std::cout << std::endl;
-    //
-    //    if (places.size() != 0)
-    //    {
-    //        rbf.push_back(places[0]);
-    //        for (auto i = ++places.begin(); i != places.end(); ++i)
-    //            rbf.push_back(rbf.back() + (*i));
-    //
-    //    }
 }
 
 float TaskSet::getRbf(long t)
 {
-    auto hyperperiod = period * rbf.size();
-    if (t < hyperperiod)
-    {
-        return rbf[t/period];
-    }
-    else
-    {
-        long index = long(t / period) % long(hyperperiod / period);
-        long n = long(t/hyperperiod);
-        return (n * rbf.back() + rbf[index]);
-    }
+    float rbf = 0;
+    for (auto time = 0; time <= t; time += period)
+        for (auto task : taskset)
+            rbf += task->getFeta(time);
+    return rbf;
 }
 
 bool TaskSet::isEmpty()
@@ -246,7 +231,6 @@ bool TaskSet::checkSchedulability()
         {
             response_t.push_back(tmp_taskset.getResponseTimes().back());
             slaks.push_back(tmp_taskset.getMinSlack());
-            //std::cout << "slack: " << tmp_taskset.getMinSlack() << std::endl;
         }
     }
     // If schedulability test suceded, return true
@@ -273,8 +257,8 @@ bool TaskSet::computeResponseTimeO()
     for (auto r : this_task->get())
         std::cout << r << " ";
     std::cout << std::endl;
-    std::cout << "period: " << period << ", this_task->getPeriod(): " <<
-    this_task->getPeriod() << std::endl;
+    std::cout << "period: " << period << ", this_task->getPeriod(): "
+    << this_task->getPeriod() << std::endl;
 #endif
     
     
@@ -318,13 +302,16 @@ bool TaskSet::computeResponseTimeO()
             //  time and RBF
             
             
-            long t = floor( (ti - this_task->getOffset()) / this_task->getPeriod() );
+            long t = floor((ti - this_task->getOffset()) /
+                           this_task->getPeriod());
             t = t * this_task->getPeriod() + this_task->getOffset();
             if (t < ti)
                 t += this_task->getPeriod();
             
             auto D = ti + (t - ti) + this_task->dstNext(t);
-            
+#ifdef DEBUG_RT
+            std::cout << "D: " << D << std::endl;
+#endif
             for (auto i = ti; i <= D; i+=period)
             {
                 
@@ -447,14 +434,12 @@ bool TaskSet::computeResponseTimeO()
                     }
                     else if (intersection > D && t > ti)
                     {
-                        //std::cout << "==> intersection > D && t > ti" << std::endl;
                         return false;
                     }
                     break;
                 }
-                if (found == false && time > D)
+                if (found == false && (time + this_task->getOffset()) > D)
                 {
-                    //std::cout << "==> found = false" << std::endl;
                     return false;
                 }
             }
@@ -462,7 +447,11 @@ bool TaskSet::computeResponseTimeO()
         }
     }
     
-    auto wcrt = *std::max_element(interm_resp_t.begin(),
+    auto wcrt = 0;
+    if (interm_resp_t.size() == 0)
+        return false;
+    else
+        wcrt = *std::max_element(interm_resp_t.begin(),
                                   interm_resp_t.end());
     response_t.push_back(wcrt);
     return true;
@@ -858,6 +847,13 @@ void TaskSet::removeFunction(Function *f)
     long p = 1;
     for (auto task : taskset)
         task->changePriority(p++);
+
+    period = 0;
+    places.clear();
+    rbf.clear();
+    rbfs.clear();
+    slaks.clear();
+    response_t.clear();
     
     // Compute Period
     for (auto task : taskset)
@@ -872,6 +868,7 @@ void TaskSet::removeFunction(Function *f)
         if ((*i)->getFunSize())
             period = gcd(period, (*i)->getPeriod());
     
+    computeFeta();
     std::sort(taskset.begin(), taskset.end(), tasksort);
 }
 

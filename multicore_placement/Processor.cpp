@@ -23,7 +23,7 @@
 #include <algorithm>
 #include <map>
 
-#define DEBUG_ICA
+//#define DEBUG_ICA
 
 bool sort_density(Task* a, Task* b)
 {
@@ -198,10 +198,20 @@ std::map<Task*, float> Processor::setNewOffsets()
     return offsets;
 }
 
-void Processor::setOffsets(std::map<Task*, float> offsets)
+void Processor::setOffsets(std::map<Function*, float> offsets)
 {
-    for (auto t : offsets)
-        t.first->setOffset(t.second);
+    for (auto core : cores)
+    {
+        for (auto function : offsets)
+        {
+            if (core->isMy(function.first))
+            {
+                auto task = core->getTask(function.first);
+                task->setOffset(function.second);
+                
+            }
+        }
+    }
 }
 
 bool Processor::checkSchedulability()
@@ -276,7 +286,7 @@ void Processor::interCoreAllocation(float Ub)
         
         // Contains all the offsets for each task in all the cores for each
         // assignment of runnable in an affine core
-        std::map<TaskSet*, std::map<Task*, float> > offsets_c;
+        std::map<TaskSet*, std::map<Function*, float> > offsets_c;
         
         for (auto core : affine_cores)
         {
@@ -289,7 +299,8 @@ void Processor::interCoreAllocation(float Ub)
 
 #ifdef DEBUG_ICA
             std::cout << "Trying on core: "
-            << (std::find(cores.begin(), cores.end(), core) - cores.begin())
+            << std::distance(cores.begin(),
+                             std::find(cores.begin(), cores.end(), core))
             << std::endl;
             
             std::cout << "Offsets before allocation:" << std::endl;
@@ -339,6 +350,7 @@ void Processor::interCoreAllocation(float Ub)
                 std::cout << "\t" << t.first->getName() << ": " << t.second
                 << std::endl;
 #endif
+            
             // If the solution converge and is schedulable
             if (tmp_resp_t == resp_times && checkSchedulability())
             {
@@ -358,7 +370,16 @@ void Processor::interCoreAllocation(float Ub)
                 // Take the minimum slack among all the cores for the allocation
                 // of "runnable" in this affine core
                 slacks[core] = *std::min_element(tmp_slacks.begin(), tmp_slacks.end());
-                offsets_c[core] = offsets;
+                
+                for (auto offset : offsets)
+                {
+                    for (auto function : offset.first->getFunctions())
+                    {
+                        std::map<Function*, float> tmp;
+                        tmp[function] = offset.second;
+                        offsets_c[core] = tmp;
+                    }
+                }
 
             }
             
@@ -425,7 +446,6 @@ void Processor::interCoreAllocation(float Ub)
             {
                 std::cout << "Unable to find a schedulable solution"
                 << std::endl;
-                print(std::cout);
                 exit(-1);
             }
 
@@ -466,13 +486,10 @@ void Processor::interCoreAllocation(float Ub)
                 auto core = getCore(affine_elem.first);
                 core->removeFunction(affine_elem.first);
             }
-                
             
             // The affine set must be re-allocated
             for (auto f : affine_set)
                 NAR.push_back(f.first);
-            
-            
             
             // Offsets and schedulability analysis must be computed again
             
@@ -509,7 +526,8 @@ void Processor::print(std::ostream &stream)
     for (auto core: cores)
     {
         stream << "Core: " << i++ << std::endl;
-        core->printTs(stream);
+        //core->printTs(stream);
+        core->printTsExt(stream);
         stream << std::endl;
     }
     
