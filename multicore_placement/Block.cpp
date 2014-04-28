@@ -26,12 +26,12 @@
 Block::Block() : Feta()
 {
     std::vector<int> base_periods;
-    base_periods.push_back(10);
-    base_periods.push_back(35);
+    base_periods.push_back(3);
+    base_periods.push_back(30);
     base_periods.push_back(15);
     base_periods.push_back(5);
     base_periods.push_back(4);
-    base_periods.push_back(8);
+
     
     
     

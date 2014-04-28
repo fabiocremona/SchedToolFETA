@@ -29,21 +29,31 @@
 
 #define MULTIPLIER 99999999999999
 
+// Arguments:
+// - input file
+// - load
+// - number of cores
+// - ub
+// - Random <R>
 
 int main( int argc, const char*   argv[] )
 {
     ofstream output;
     output.open("test_0_results.txt");
-    //srand(unsigned(time(NULL)*99999999999999));
-Parser ps0("/Users/fabiocremona/Documents/SSSA-PhD/Works/FETA/multicore_placement/multicore_placement/test_1.txt", "5");
+    if (*argv[5] == 'R')
+        srand(unsigned(time(NULL)*99999999999999));
+    Parser ps0(argv[1], argv[2]);
+    
     ps0.create();
     TaskSet ts0(*ps0.getRMTS());
     
-    
-    Processor p0(ts0.getTs(), 9);
-    p0.interCoreAllocation(0.9);
+    std::string n_cores = argv[3];
+    std::string ub = argv[4];
+    Processor p0(ts0.getTs(), (int)atof(n_cores.c_str()));
+    p0.interCoreAllocation((float)atof(ub.c_str()));
 
     p0.print(std::cout);
+    p0.print(output);
     
     std::cout << "End" << std::endl;
     
