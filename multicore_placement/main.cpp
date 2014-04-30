@@ -27,6 +27,9 @@
 #include "RtwOpt.h"
 #include "Processor.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+
 #define MULTIPLIER 99999999999999
 
 // Arguments:
@@ -42,20 +45,37 @@ int main( int argc, const char*   argv[] )
     output.open("test_0_results.txt");
     if (*argv[5] == 'R')
         srand(unsigned(time(NULL)*99999999999999));
-    Parser ps0(argv[1], argv[2]);
     
-    ps0.create();
-    TaskSet ts0(*ps0.getRMTS());
-    
-    std::string n_cores = argv[3];
-    std::string ub = argv[4];
-    Processor p0(ts0.getTs(), (int)atof(n_cores.c_str()));
-    p0.interCoreAllocation((float)atof(ub.c_str()));
 
-    p0.print(std::cout);
-    p0.print(output);
+    bool is_sched;
+    int occurs = 0;
+    int iter_num = (int)atof(argv[6]);
     
-    std::cout << "End" << std::endl;
+    for (auto i = 0; i < iter_num; i++)
+    {
+        output << "Iteration: " << i << std::endl;
+        std::string tgff_command = "./tgff ";
+        tgff_command = tgff_command + argv[1];
+        system("./tgff tg");
+        Parser ps0(argv[1], argv[2]);
+        ps0.create();
+        TaskSet ts0(*ps0.getRMTS());
+        
+        std::string n_cores = argv[3];
+        std::string ub = argv[4];
+        
+        Processor p0(ts0.getTs(), (int)atof(n_cores.c_str()));
+        is_sched = p0.interCoreAllocation((float)atof(ub.c_str()));
+        
+        if (is_sched == true)
+            occurs++;
+        
+        p0.print(output);
+        output << std::endl;
+        std::cout << "Done: " << i << std::endl;
+    }
+    
+    std::cout << "Schedulability: " << occurs/iter_num << "%" << std::endl;
     
     return 0;
 }

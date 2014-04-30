@@ -214,6 +214,13 @@ void Processor::setOffsets(std::map<Function*, float> offsets)
     }
 }
 
+void Processor::clearOffsets()
+{
+    for (auto core : cores)
+        for (auto task : core->getTs())
+            task->setOffset(0);
+}
+
 bool Processor::checkSchedulability()
 {
     auto alloc_cores = getAllocCores();
@@ -248,8 +255,9 @@ std::pair<TaskSet*, float> Processor::getOffset(Function *f)
     return make_pair(core, offset);
 }
 
-void Processor::interCoreAllocation(float Ub)
+bool Processor::interCoreAllocation(float Ub)
 {
+    std::cout << "Starting allocating..." << std::endl;
     std::vector<Function*> BL;
     std::vector<Function*> PBL;
     
@@ -369,7 +377,8 @@ void Processor::interCoreAllocation(float Ub)
                 
                 // Take the minimum slack among all the cores for the allocation
                 // of "runnable" in this affine core
-                slacks[core] = *std::min_element(tmp_slacks.begin(), tmp_slacks.end());
+                slacks[core] = *std::min_element(tmp_slacks.begin(),
+                                                 tmp_slacks.end());
                 
                 for (auto offset : offsets)
                 {
@@ -392,7 +401,8 @@ void Processor::interCoreAllocation(float Ub)
             
         }
 #ifdef DEBUG_ICA
-        std::cout << "Affine schedulable solutions: " << slacks.size() << std::endl;
+        std::cout << "Affine schedulable solutions: " << slacks.size()
+        << std::endl;
 #endif
         // If I found schedulable solutions
         if (slacks.size() != 0)
@@ -446,7 +456,7 @@ void Processor::interCoreAllocation(float Ub)
             {
                 std::cout << "Unable to find a schedulable solution"
                 << std::endl;
-                exit(-1);
+                return false;
             }
 
             // runnable was in the black list, now put it in the post black
@@ -496,9 +506,11 @@ void Processor::interCoreAllocation(float Ub)
             std::map<Function*, float> tmp_resp_t = getResponseTimes();
             std::map<Function*, float> resp_times;
             long limit = 0;
+            
+            clearOffsets();
+            
             while (tmp_resp_t != resp_times && ++limit < 100)
             {
-                //std::cout << "Trying to converge" << std::endl;
                 // old response times = current response times
                 resp_times = tmp_resp_t;
                 
@@ -508,16 +520,18 @@ void Processor::interCoreAllocation(float Ub)
                 // compute new response times
                 tmp_resp_t = getResponseTimes();
             }
+            
             if (tmp_resp_t != resp_times)
             {
                 std::cout << "ERROR: I removed the affine set and I am not able"
                 << " to find a schedulable solution anymore" << std::endl;
-                exit(-1);
+                return false;
             }
             
         }
 
     } // while( NAR.size() != 0 )
+    return true;
 }
         
 void Processor::print(std::ostream &stream)
@@ -526,18 +540,9 @@ void Processor::print(std::ostream &stream)
     for (auto core: cores)
     {
         stream << "Core: " << i++ << std::endl;
-        //core->printTs(stream);
         core->printTsExt(stream);
         stream << std::endl;
     }
-    
-//    i = 0;
-//    for (auto core: cores)
-//    {
-//        stream << "Core: " << i++ << std::endl;
-//        core->printRbfs(stream);
-//        stream << std::endl;
-//    }
 }
 
 
@@ -565,19 +570,38 @@ TaskSet* Processor::getCore(Function *f)
     return nullptr;
 }
 
-void Processor::printInternalStats(std::vector<TaskSet* > cores)
+void Processor::optimizeRT2()
 {
-    long core_idx = 0;
-    for (auto core : cores)
-    {
-        auto slacks = core->getSlack();
-        cout << "Slack for core: " << core_idx++ << endl;
-        for (auto slack : slacks) {
-            cout << slack << " ";
-        }
-        cout << endl;
-    }
+    // Allocate runnable
+    // If the worst offset is with respect to core, assign runnable
+    // without offset, otherwise assign with offset
+    
+    // Take the new response times
+    auto resp_time = getResponseTimes();
+    
+    // 
+    
+    
+//    // The offsets I use
+//    std::map<Task*, float> offsets;
+//    
+//    // Resolve fixed point problem
+//    int limit = 0;
+//    while (tmp_resp_t != resp_times && ++limit < 100)
+//    {
+//        //std::cout << "Trying to converge" << std::endl;
+//        // old response times = current response times
+//        resp_times = tmp_resp_t;
+//        
+//        // Set new offsets
+//        offsets = setNewOffsets();
+//        
+//        // compute new response times
+//        tmp_resp_t = getResponseTimes();
+//    }
+//    offsets = setNewOffsets();
 }
+
 
 void Processor::computeRT()
 {

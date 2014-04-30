@@ -26,26 +26,28 @@
 Block::Block() : Feta()
 {
     std::vector<int> base_periods;
+    //base_periods.push_back(1);
+    base_periods.push_back(2);
     base_periods.push_back(3);
-    base_periods.push_back(30);
-    base_periods.push_back(15);
-    base_periods.push_back(5);
     base_periods.push_back(4);
+    base_periods.push_back(5);
 
     
+    int N = 1 + int(3 * ((float)rand() / (float)RAND_MAX));
     
     
-    period = base_periods[(int)(base_periods.size() * (float)rand() / (float)RAND_MAX)];
+    //period = base_periods[(int)(base_periods.size() * (float)rand() / (float)RAND_MAX)];
     
     /**
      Generate the period randomly, by choosing it between one of the values
      in base_periods
      */
-    //    for (int i = 0; i < 3; i++) {
-    //        int idx = (int)(base_periods.size() * (float)rand() / (float)RAND_MAX);
-    //        period = gcd(period, base_periods[idx]);
-    //    }
-    
+    period = 1;
+    for (int i = 0; i < N; i++)
+    {
+        int idx = (int)(base_periods.size() * (float)rand() / (float)RAND_MAX);
+        period = period * base_periods[idx];
+    }
     
     /**
      Generate the block WCET randomly, by choosing a number between [0, 1]

@@ -56,9 +56,6 @@ class Processor {
     // Returns the list of runnables which has predecessors already allocated
     std::vector<Function*> getEnabledRunnables();
     
-    // Print some internal stats
-    void printInternalStats(std::vector<TaskSet*>);
-    
     // Return the list of already allocated runnables
     std::vector<Function*> getAllocatedRunnables();
     
@@ -81,11 +78,16 @@ class Processor {
     
     void setOffsets(std::map<Function*, float>);
     
+    // Set all offsets to zero
+    void clearOffsets();
+    
     // Returns the set of cores which contains at list one task
     std::vector<TaskSet*> getAllocCores();
     
     // Returns the offset for a given runnable
     std::pair<TaskSet*, float> getOffset(Function*);
+    
+    
     
 public:
     
@@ -94,9 +96,10 @@ public:
     ~Processor();
     
     // Allocate runnables with an utilization bound for each core
-    void interCoreAllocation(float);
+    bool interCoreAllocation(float);
     
-    void test();
+    // Optimize RT blocke of type 2
+    void optimizeRT2();
     
     long getCoreIdx(Function*);
     TaskSet* getCore(Function*);
