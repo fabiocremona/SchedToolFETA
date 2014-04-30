@@ -454,8 +454,8 @@ bool Processor::interCoreAllocation(float Ub)
 
             if (pbl != PBL.end())
             {
-                std::cout << "Unable to find a schedulable solution"
-                << std::endl;
+                //std::cout << "Unable to find a schedulable solution"
+                //<< std::endl;
                 return false;
             }
 
@@ -507,7 +507,7 @@ bool Processor::interCoreAllocation(float Ub)
             std::map<Function*, float> resp_times;
             long limit = 0;
             
-            clearOffsets();
+            //clearOffsets();
             
             while (tmp_resp_t != resp_times && ++limit < 100)
             {
@@ -523,8 +523,8 @@ bool Processor::interCoreAllocation(float Ub)
             
             if (tmp_resp_t != resp_times)
             {
-                std::cout << "ERROR: I removed the affine set and I am not able"
-                << " to find a schedulable solution anymore" << std::endl;
+                //std::cout << "ERROR: I removed the affine set and I am not able"
+                //<< " to find a schedulable solution anymore" << std::endl;
                 return false;
             }
             

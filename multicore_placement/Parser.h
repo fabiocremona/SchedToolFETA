@@ -42,12 +42,14 @@ class Parser {
     void checkFunctions();
     
     float Up;
+    void setUb();
+    
 public:
     Parser(std::string);
     Parser(std::string, std::string);
     ~Parser();
     void create();
-    std::map<std::string, Function*> getFunctions() {return functions;};
+    std::vector<Function*> getFunctions();
     std::vector<Task* > * getRMTS();
 };
 

@@ -33,50 +33,58 @@
 #define MULTIPLIER 99999999999999
 
 // Arguments:
-// - input file
-// - load
-// - number of cores
-// - ub
-// - Random <R>
+// #cores, Ub
 
 int main( int argc, const char*   argv[] )
 {
+    // number of cores
+    //int NC = 4;
+    int NI = 10;
+    
+    std::string nc = argv[1];
+    int NC = (int)atof(nc.c_str());
+    
+    std::string ub = argv[2];
+    int UB = (int)atof(ub.c_str());
+    
     ofstream output;
-    output.open("test_0_results.txt");
-    if (*argv[5] == 'R')
-        srand(unsigned(time(NULL)*99999999999999));
+    output.open("results.txt");
     
-
-    bool is_sched;
-    int occurs = 0;
-    int iter_num = (int)atof(argv[6]);
+    // enable random seed
+    srand(unsigned(time(NULL)*99999999999999));
     
-    for (auto i = 0; i < iter_num; i++)
+    for (auto u = 0.1; u <= NC; u += 0.1)
     {
-        output << "Iteration: " << i << std::endl;
-        std::string tgff_command = "./tgff ";
-        tgff_command = tgff_command + argv[1];
-        system("./tgff tg");
-        Parser ps0(argv[1], argv[2]);
-        ps0.create();
-        TaskSet ts0(*ps0.getRMTS());
+        int occurs = 0;
         
-        std::string n_cores = argv[3];
-        std::string ub = argv[4];
-        
-        Processor p0(ts0.getTs(), (int)atof(n_cores.c_str()));
-        is_sched = p0.interCoreAllocation((float)atof(ub.c_str()));
-        
-        if (is_sched == true)
-            occurs++;
-        
-        p0.print(output);
-        output << std::endl;
-        std::cout << "Done: " << i << std::endl;
+        for (auto i = 0; i < NI; i++)
+        {
+            system("./tgff test_graph");
+            Parser ps0("test_graph.tgff", to_string(u));
+            ps0.create();
+            
+            output << "Iteration: " << i << " load: " << u << std::endl;
+            std::cout << "Iteration: " << i << " load: " << u << std::endl;
+            
+            output << "Functions: " << std::endl;
+            for (auto f : ps0.getFunctions())
+                f->print(output);
+            
+            Processor p0(ps0.getFunctions(), NC);
+            bool is_sched = p0.interCoreAllocation(UB);
+            
+            if (is_sched == true)
+            {
+                output << "Solution schedulable" << std::endl;
+                p0.print(output);
+                occurs++;
+            }
+            else
+                output << "Solution NOT schedulable" << std::endl;
+        }
+        output << "===> Schedulability: " << occurs/NI*100 << "%" << std::endl;
+        std::cout << "===> Schedulability: " << occurs/NI*100 << "%" << std::endl;
     }
-    
-    std::cout << "Schedulability: " << occurs/iter_num << "%" << std::endl;
-    
     return 0;
 }
 

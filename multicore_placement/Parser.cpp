@@ -45,6 +45,28 @@ Parser::~Parser()
         delete function.second;
 }
 
+void Parser::setUb()
+{
+    auto n_fun = functions.size();
+    
+    std::vector<float> u;
+    for (auto i = functions.begin(); i != functions.end(); i++)
+    {
+        auto p = -0.2 + 0.4*(float)rand() / (float)RAND_MAX;
+        auto t = (Up / n_fun);
+        u.push_back(t + t * p);
+    }
+    float T = 0;
+    for (auto e : u)
+        T += e;
+    
+    auto F = Up/T;
+    
+    auto i = 0;
+    for (auto f : functions)
+        f.second->setUtilizationBound(u[i++] * F);
+}
+
 void Parser::create()
 {
     std::ifstream source;
@@ -84,10 +106,8 @@ void Parser::create()
     source.close();
     
     // Set components utilization
-    auto n_fun = functions.size();
-    for (auto i = functions.begin(); i != functions.end(); i++)
-        (*i).second->setUtilizationBound(Up / n_fun);
     
+    setUb();
     checkFunctions();
 }
 
@@ -145,6 +165,14 @@ void Parser::checkFunctions()
             }
         }
     }
+}
+
+std::vector<Function*> Parser::getFunctions()
+{
+    std::vector<Function*> funs;
+    for (auto f : functions)
+        funs.push_back(f.second);
+    return funs;
 }
 
 

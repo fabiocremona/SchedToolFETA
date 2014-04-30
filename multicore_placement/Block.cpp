@@ -26,22 +26,19 @@
 Block::Block() : Feta()
 {
     std::vector<int> base_periods;
-    //base_periods.push_back(1);
+    base_periods.push_back(1);
     base_periods.push_back(2);
     base_periods.push_back(3);
     base_periods.push_back(4);
     base_periods.push_back(5);
-
-    
-    int N = 1 + int(3 * ((float)rand() / (float)RAND_MAX));
-    
-    
-    //period = base_periods[(int)(base_periods.size() * (float)rand() / (float)RAND_MAX)];
+    base_periods.push_back(6);
     
     /**
      Generate the period randomly, by choosing it between one of the values
      in base_periods
      */
+    //float M = 4 * (float)rand() / (float)RAND_MAX;
+    int N = 1 + int(3 * ((float)rand() / (float)RAND_MAX));
     period = 1;
     for (int i = 0; i < N; i++)
     {

@@ -21,21 +21,45 @@
 #include <algorithm>
 
 // The max number of locations for each feta
-#define N_BLOC 4
 
 // This constructor randomly generate the function structure
 Function::Function(std::string n)
 {
     name = n;
     Block* block;
-    // Generate the FETA
-    int n_loc = (int)(1 + ((float)rand() / (float)RAND_MAX) * N_BLOC);
+    float N = 4 * (float)rand() / (float)RAND_MAX;
     
+    // Generate the FETA
+    int n_loc = (int)(1 + ( N * (float)rand() / (float)RAND_MAX) );
     for (auto i = 0; i < n_loc; ++i)
     {
         block = new Block();
         blocks.push_back(block);
         computeFeta();
+    }
+    
+    
+    
+    std::vector<int> base_periods;
+    base_periods.push_back(1);
+    base_periods.push_back(2);
+    base_periods.push_back(3);
+    base_periods.push_back(4);
+    base_periods.push_back(5);
+    base_periods.push_back(7);
+    base_periods.push_back(9);
+    
+    /**
+     Generate the period randomly, by choosing it between one of the values
+     in base_periods
+     */
+    float M = 2 * (float)rand() / (float)RAND_MAX;
+    int NN = 1 + int(M * ((float)rand() / (float)RAND_MAX));
+    period = 1;
+    for (int i = 0; i < NN; i++)
+    {
+        int idx = (int)(base_periods.size() * (float)rand() / (float)RAND_MAX);
+        period = period * base_periods[idx];
     }
 }
 
@@ -134,6 +158,7 @@ void Function::setUtilizationBound(float ub)
     for (auto i = places.begin(); i != places.end(); i++)
     {
         auto time = ( i - places.begin() ) * period;
+        
         // Normalize the FETA and set its Utilization Bound
         (*i) = ((*i) / norm) * ub * dstNext(time);
     }
