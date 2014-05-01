@@ -87,6 +87,7 @@ class Processor {
     // Returns the offset for a given runnable
     std::pair<TaskSet*, float> getOffset(Function*);
     
+    void printPercentage();
     
     
 public:

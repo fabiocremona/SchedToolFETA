@@ -941,7 +941,7 @@ TEST_CASE( "Function graph: test_1 - three", "[testbed]")
     ts0.addFunction(&f0_2);
     ts0.addFunction(&f0_4);
     
-    REQUIRE(ts0.checkSchedulability() == true);
+    REQUIRE(ts0.checkSchedulability() == false);
     
 }
 
@@ -977,7 +977,7 @@ TEST_CASE( "Function graph: test_1 - five", "[testbed]")
     
 }
 
-TEST_CASE( "Function graph: test_1 - six", "[testbed]")
+TEST_CASE( "Function graph: test_1 - six", "[testbed]" )
 {
     std::vector<float> v0;
     v0.push_back(1.77778); v0.push_back(0.970656); v0.push_back(0.970656); v0.push_back(0.970656); v0.push_back(0.970656); v0.push_back(0.970656); v0.push_back(0.970656); v0.push_back(0.970656); v0.push_back(0.970656); v0.push_back(0.970656);
@@ -998,4 +998,14 @@ TEST_CASE( "Function graph: test_1 - six", "[testbed]")
     REQUIRE(ts0.getRbf(6) == Approx(3.719092));
 }
 
+TEST_CASE( "Function graph: test_random - one", "[testbed]" )
+{
+    std::vector<float> v0;
+    v0.push_back(1.03473); v0.push_back(0.26839); v0.push_back(0.26839); v0.push_back(0.26839); v0.push_back(0.26839); v0.push_back(0.395536); v0.push_back(0.383572); v0.push_back(0.26839); v0.push_back(0.26839); v0.push_back(0.26839); v0.push_back(0.522681); v0.push_back(0.26839); v0.push_back(0.368141); v0.push_back(0.26839); v0.push_back(0.26839); v0.push_back(0.649826); v0.push_back(0.26839); v0.push_back(0.26839); v0.push_back(0.352709); v0.push_back(0.26839); v0.push_back(0.776972); v0.push_back(0.26839); v0.push_back(0.26839); v0.push_back(0.26839); v0.push_back(0.337278); v0.push_back(0.904117); v0.push_back(0.26839); v0.push_back(0.26839); v0.push_back(0.26839); v0.push_back(0.26839);
+    Function f0("t0", 1, v0);
+    TaskSet ts0;
+    ts0.addFunction(&f0);
+    ts0.getTask(&f0)->setOffset(19);
+    REQUIRE(ts0.checkSchedulability() == false);
+}
 

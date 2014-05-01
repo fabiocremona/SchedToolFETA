@@ -45,9 +45,9 @@ Function::Function(std::string n)
     base_periods.push_back(2);
     base_periods.push_back(3);
     base_periods.push_back(4);
-    base_periods.push_back(5);
-    base_periods.push_back(7);
-    base_periods.push_back(9);
+    //base_periods.push_back(5);
+    //base_periods.push_back(7);
+    //base_periods.push_back(9);
     
     /**
      Generate the period randomly, by choosing it between one of the values

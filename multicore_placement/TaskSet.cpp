@@ -135,7 +135,7 @@ void TaskSet::computeRbf()
 {
     if (places.size() != 0)
     {
-        for (auto t = 0; t <= (places.size() * period); t+= period)
+        for (auto t = 0; t <= (2 * places.size() * period); t+= period)
         {
             float value = 0;
             for (auto task : taskset)
@@ -150,10 +150,20 @@ void TaskSet::computeRbf()
 
 float TaskSet::getRbf(long t)
 {
-    float rbf = 0;
-    for (auto time = 0; time <= t; time += period)
-        for (auto task : taskset)
-            rbf += task->getFeta(time);
+    if (t >= rbf.size()*period)
+    {
+        float rbf = 0;
+        for (auto time = 0; time <= t; time += period)
+            for (auto task : taskset)
+                rbf += task->getFeta(time);
+        return rbf;
+    }
+    
+    return rbf[int(t/period)];
+}
+
+std::vector<float> TaskSet::getRbf()
+{
     return rbf;
 }
 
@@ -181,11 +191,6 @@ bool TaskSet::checkInterval(long s, long e)
         intermedie += period;
     }
     return false;
-}
-
-std::vector<float> TaskSet::getRbf()
-{
-    return rbf;
 }
 
 bool TaskSet::checkSchedulability()
@@ -271,12 +276,38 @@ bool TaskSet::computeResponseTimeO()
     if (this_task->getOffset() != 0)
         time_instants.push_back(this_task->getOffset());
     
-    for ( auto i = this_task->getOffset(); i < ( ( rbf.size() - 1 ) * period ); i += period )
+    for ( auto i = this_task->getOffset();
+         i <= ( ( places.size() - 1 ) * period ); i += period )
         if (getRbf(i) != getRbf(i+period))
             time_instants.push_back(i+period);
     
+    bool is_no_offset = true;
+    for (auto task : taskset)
+    {
+        if (task->getOffset() != 0)
+        {
+            is_no_offset = false;
+            break;
+        }
+    }
+    
+    std::vector<long> tmp_ti;
+    // If the task set is offset free, I have to check up to task period
+    if (is_no_offset == true)
+    {
+        for (auto t = time_instants.begin(); t != time_instants.end(); t++)
+        {
+            if (*t <= this_task->getPeriod())
+            {
+                tmp_ti.push_back(*t);
+            }
+        }
+        time_instants = tmp_ti;
+    }
+    
     // I don't need to check the last point
-    time_instants.pop_back();
+    else
+        time_instants.pop_back();
     
     // interm_resp_t contains the response times for each busy period
     std::vector<float> interm_resp_t;
@@ -312,7 +343,7 @@ bool TaskSet::computeResponseTimeO()
 #ifdef DEBUG_RT
             std::cout << "D: " << D << std::endl;
 #endif
-            for (auto i = ti; i <= D; i+=period)
+            for (auto i = ti; i < D; i+=period)
             {
                 
                 time += period;
@@ -438,7 +469,8 @@ bool TaskSet::computeResponseTimeO()
                     }
                     break;
                 }
-                if (found == false && (time + this_task->getOffset()) > D)
+                
+                if (found == false && (i + period) >= D)
                 {
                     return false;
                 }

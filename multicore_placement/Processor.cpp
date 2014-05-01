@@ -50,11 +50,13 @@ Processor::Processor(std::vector<Task* >  ts, int n_cores)
     NAR = runnables;
 }
 
-Processor::Processor(std::vector<Function*> runnables, int n_cores)
+Processor::Processor(std::vector<Function*> runn, int n_cores)
 {
     for (auto i = 0 ; i < n_cores; i++)
         cores.push_back(new TaskSet());
-    NAR = runnables;
+    NAR = runn;
+    runnables = runn;
+    
 }
 
 Processor::~Processor()
@@ -255,6 +257,12 @@ std::pair<TaskSet*, float> Processor::getOffset(Function *f)
     return make_pair(core, offset);
 }
 
+void Processor::printPercentage()
+{
+    std::cout << "Total: " << runnables.size() << ", left: "
+    << NAR.size() << std::endl;
+}
+
 bool Processor::interCoreAllocation(float Ub)
 {
     std::cout << "Starting allocating..." << std::endl;
@@ -263,6 +271,8 @@ bool Processor::interCoreAllocation(float Ub)
     
     while (NAR.size() != 0)
     {
+        printPercentage();
+        
         // Take the enabled tasks and order them by density
         auto en_runnables = getEnabledRunnables();
         std::sort(en_runnables.begin(), en_runnables.end(), sort_Fdensity);

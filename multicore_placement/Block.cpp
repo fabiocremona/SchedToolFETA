@@ -29,9 +29,9 @@ Block::Block() : Feta()
     base_periods.push_back(1);
     base_periods.push_back(2);
     base_periods.push_back(3);
-    base_periods.push_back(4);
+    //base_periods.push_back(4);
     base_periods.push_back(5);
-    base_periods.push_back(6);
+    //base_periods.push_back(6);
     
     /**
      Generate the period randomly, by choosing it between one of the values
