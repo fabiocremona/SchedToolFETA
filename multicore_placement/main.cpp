@@ -37,8 +37,8 @@
 
 int main( int argc, const char*   argv[] )
 {
+
     // number of cores
-    //int NC = 4;
     int NI = 10;
     
     std::string nc = argv[1];
@@ -53,12 +53,27 @@ int main( int argc, const char*   argv[] )
     // enable random seed
     srand(unsigned(time(NULL)*99999999999999));
     
+    
+    std::map<float, float> results;
+    
+    
     for (auto u = 0.1; u <= NC; u += 0.1)
     {
         int occurs = 0;
-        
+
         for (auto i = 0; i < NI; i++)
         {
+
+            std::string tgff_file_name = "./test_graph.tgffopt";
+            ofstream input;
+            input.open(tgff_file_name);
+            
+            std::string graph = "tg_cnt 1\ntask_cnt 10 5\nprob_multi_start_nodes 1\nstart_node 2 1\ntg_write\neps_write";
+            graph = "seed " + to_string(int(u*i*100)) + "\n" + graph;
+            
+            input << graph;
+            input.close();
+            
             system("./tgff test_graph");
             Parser ps0("test_graph.tgff", to_string(u));
             ps0.create();
@@ -82,9 +97,20 @@ int main( int argc, const char*   argv[] )
             else
                 output << "Solution NOT schedulable" << std::endl;
         }
+        
+        results[u] = occurs/NI*100;
         output << "===> Schedulability: " << occurs/NI*100 << "%" << std::endl;
         std::cout << "===> Schedulability: " << occurs/NI*100 << "%" << std::endl;
     }
+    
+    ofstream results_p;
+    results_p.open("results_percentage.txt");
+    for (auto r : results)
+        results_p << r.first << "\t" << r.second << std::endl;
+    results_p.close();
+    
+    
+    output.close();
     return 0;
 }
 
