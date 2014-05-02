@@ -20,6 +20,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <omp.h>
 
 
 #include "Parser.h"
@@ -37,9 +38,9 @@
 
 int main( int argc, const char*   argv[] )
 {
-
+    
     // number of cores
-    int NI = 10;
+    int NI = 100;
     
     std::string nc = argv[1];
     int NC = (int)atof(nc.c_str());
@@ -52,55 +53,71 @@ int main( int argc, const char*   argv[] )
     
     // enable random seed
     srand(unsigned(time(NULL)*99999999999999));
-    
-    
     std::map<float, float> results;
+    int occurs = 0;
     
-    
-    for (auto u = 0.1; u <= NC; u += 0.1)
+    for (auto u = 10; u <= (NC*10); u += 1)
     {
-        int occurs = 0;
-
+        occurs = 0;
+        
+        #pragma omp parallel for
         for (auto i = 0; i < NI; i++)
         {
-
-            std::string tgff_file_name = "./test_graph.tgffopt";
+            float U = u / 10;
+            std::string tgff_file_name = "test_graph" + to_string(int(u)) + "_" + to_string(i);
             ofstream input;
-            input.open(tgff_file_name);
+            input.open(tgff_file_name + ".tgffopt");
             
             std::string graph = "tg_cnt 1\ntask_cnt 10 5\nprob_multi_start_nodes 1\nstart_node 2 1\ntg_write\neps_write";
-            graph = "seed " + to_string(int(u*i*100)) + "\n" + graph;
+            graph = "seed " + to_string(int(u*i*1000)) + "\n" + graph;
             
             input << graph;
             input.close();
             
-            system("./tgff test_graph");
-            Parser ps0("test_graph.tgff", to_string(u));
+            #pragma omp critical
+            {
+            std::string command = "./tgff " + tgff_file_name;
+            system(command.c_str());
+            }
+            
+            Parser ps0(tgff_file_name + ".tgff", to_string(U));
             ps0.create();
             
-            output << "Iteration: " << i << " load: " << u << std::endl;
-            std::cout << "Iteration: " << i << " load: " << u << std::endl;
-            
-            output << "Functions: " << std::endl;
-            for (auto f : ps0.getFunctions())
-                f->print(output);
+            #pragma omp critical
+            {
+                output << "Load: " << U << " - Iteration: " << i << std::endl;
+                output << "Functions: " << std::endl;
+                for (auto f : ps0.getFunctions())
+                    f->print(output);
+                std::cout << "Load: " << U << " - Iteration: " << i << std::endl;
+            }
             
             Processor p0(ps0.getFunctions(), NC);
             bool is_sched = p0.interCoreAllocation(UB);
             
             if (is_sched == true)
             {
-                output << "Solution schedulable" << std::endl;
-                p0.print(output);
-                occurs++;
+                #pragma omp critical
+                {
+                    output << "Solution schedulable" << std::endl;
+                    p0.print(output);
+                    occurs++;
+                }
             }
             else
-                output << "Solution NOT schedulable" << std::endl;
+            {
+                #pragma omp critical
+                {
+                    output << "Solution NOT schedulable" << std::endl;
+                }
+            }
         }
-        
-        results[u] = occurs/NI*100;
-        output << "===> Schedulability: " << occurs/NI*100 << "%" << std::endl;
-        std::cout << "===> Schedulability: " << occurs/NI*100 << "%" << std::endl;
+        #pragma omp critical
+        {
+            results[u] = occurs/NI*100;
+            output << "===> Schedulability: " << occurs/NI*100 << "%" << std::endl;
+            std::cout << "===> Schedulability: " << occurs/NI*100 << "%" << std::endl;
+        }
     }
     
     ofstream results_p;
