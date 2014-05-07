@@ -34,24 +34,41 @@
 class Processor;
 class TaskSet : public Feta {
     
+    long last_link_size;
+    std::vector<std::pair<Function*, Function*>> last_links;
+    
     std::vector<Task* > taskset;
-    std::vector<float> rbf;    
+    std::vector<Function*> functions;
+    std::vector<float> rbf;
     std::vector<std::pair<std::vector<float>, long>> rbfs;
     std::vector<float> response_t;
     std::vector<float> slaks;
     long total_size;
     long rt2_size;
     long rt1_size;
-    bool checkInterval(long, long);
     void computeRbf();
     bool isEmpty();
     std::map<Function*, long> offsets;
+    
+    void refreshFunctions();
+    
+    // ====> Here below, is for optimization <====
+    
+    // ---> [[src_function-dst_function], size]
+    std::map<std::pair<Function*, Function*>, long> rt2s;
+    Task* src_task;
+    Task* dst_task;
+    
+    std::vector<Function*> src_funs;
+    std::vector<Function*> dst_funs;
     
 public:
     
     TaskSet();
     TaskSet(std::vector<Task*>&);
     ~TaskSet();
+    TaskSet(const TaskSet& other);
+	TaskSet& operator = (const TaskSet& other);
     
     std::vector<Task* >& getTs();
     
@@ -73,9 +90,7 @@ public:
     float addFunction(Function*, Processor*);
     void remove(Feta *);
     void removeFunction(Function*);
-    
-    void moveFunctions(std::vector<Function* > *, Task *);
-    
+        
     // Compute the FETA and returns the RBF
     void computeFeta();
     
@@ -136,5 +151,33 @@ public:
     bool schedTest();
 
     float getLoad();
+    
+    // ====> Here below, is for optimization <====
+    
+    void optimize(Function*, Function*);
+    
+    void undoOptimize();
+    void confirmOptimization();
+    
+    // Returns the link with higher RT2 size
+    std::pair<Function*, Function*> getLink();
+    
+    //Peng:
+	// Randomly change task set priorities
+	void randomSwapPriorities();
+	
+	// Randomly partition task set
+	void randomPartition();
+	
+	// Randomly merge task sets
+	void randomMerge();
+    
+    long getTaskSetSize();
+    
+    // Compute the synchronous set for a given runnable.
+    // You must give two parameters:
+    // - std::vector<Function*>* : the container for the synchronous set
+    // - Function * : the runnable for which you want compute the synchronous set
+    void getSyncSet(std::vector<Function*>*, Function *);
 };
 #endif /* defined(__tbd_framework__TaskSet__) */

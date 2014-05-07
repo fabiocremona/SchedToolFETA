@@ -134,6 +134,19 @@ std::map<Function*, float> Processor::getResponseTimes()
     return resp_t;
 }
 
+std::map<Function*, float> Processor::getCompletionTimes()
+{
+    std::map<Function*, float> compl_t;
+    auto runnables = getAllocatedRunnables();
+    for (auto r : runnables)
+    {
+        auto core = getCore(r);
+        auto r_t = core->getCompletionTime(r);
+        compl_t[r] = r_t;
+    }
+    return compl_t;
+}
+
 bool Processor::checkSchedulability(std::map<Function*, float>& resp_t)
 {
     for (auto f : resp_t)
@@ -265,22 +278,21 @@ void Processor::printPercentage()
 
 bool Processor::interCoreAllocation(float Ub)
 {
-    std::cout << "Starting allocating..." << std::endl;
+    //std::cout << "Starting allocating..." << std::endl;
     std::vector<Function*> BL;
     std::vector<Function*> PBL;
     
+    ofstream errors;
+    errors.open("errors.txt", ios::out | ios::app);
+    
     while (NAR.size() != 0)
     {
-        printPercentage();
+        //printPercentage();
         
         // Take the enabled tasks and order them by density
         auto en_runnables = getEnabledRunnables();
         std::sort(en_runnables.begin(), en_runnables.end(), sort_Fdensity);
         auto runnable = en_runnables.front();
-        
-#ifdef DEBUG_ICA
-        std::cout << "Trying to allocate: " << runnable->getName() << std::endl;
-#endif
         
         // Get affine cores
         std::vector<TaskSet*> affine_cores;
@@ -289,6 +301,8 @@ bool Processor::interCoreAllocation(float Ub)
         else affine_cores = cores;
         
 #ifdef DEBUG_ICA
+        std::cout << "Trying to allocate: " << runnable->getName() << std::endl;
+        
         std::cout << "Affine cores " << affine_cores.size() << std::endl;
         for (auto c : affine_cores)
             std::cout << "\t" << std::distance(cores.begin(),
@@ -309,10 +323,12 @@ bool Processor::interCoreAllocation(float Ub)
         for (auto core : affine_cores)
         {
 
-            // Take the response times before runnable allocation
-            auto resp_times = getResponseTimes();
+            // Take the completion times before runnable allocation
+            auto compl_times = getCompletionTimes();
             
             // The offsets before the assignment
+            // They are used to restore the offsets after I tried to allocate
+            // a runnable
             auto orig_offsets = getOffsets();
 
 #ifdef DEBUG_ICA
@@ -337,29 +353,31 @@ bool Processor::interCoreAllocation(float Ub)
             else
                 core->addFunction(runnable, core_offset.second);
             
-            // Take the new response times
-            auto tmp_resp_t = getResponseTimes();
+            // Take the new completion times
+            auto tmp_compl_t = getCompletionTimes();
             
             // Add the response time of the new runnable to "resp_times"
-            resp_times[runnable] = tmp_resp_t[runnable];
+            compl_times[runnable] = tmp_compl_t[runnable];
 
             // The offsets I use
             std::map<Task*, float> offsets;
             
             // Resolve fixed point problem
             int limit = 0;
-            while (tmp_resp_t != resp_times && ++limit < 100)
+            
+            while (tmp_compl_t != compl_times && ++limit < 200)
             {
                 //std::cout << "Trying to converge" << std::endl;
                 // old response times = current response times
-                resp_times = tmp_resp_t;
+                compl_times = tmp_compl_t;
                 
                 // Set new offsets
                 offsets = setNewOffsets();
                 
                 // compute new response times
-                tmp_resp_t = getResponseTimes();
+                tmp_compl_t = getCompletionTimes();
             }
+            
             offsets = setNewOffsets();
             
 #ifdef DEBUG_ICA
@@ -370,7 +388,9 @@ bool Processor::interCoreAllocation(float Ub)
 #endif
             
             // If the solution converge and is schedulable
-            if (tmp_resp_t == resp_times && checkSchedulability())
+            bool is_sched = checkSchedulability();
+            
+            if (tmp_compl_t == compl_times && is_sched == true)
             {
 #ifdef DEBUG_ICA
                 std::cout << "Schedulable" << std::endl;
@@ -399,7 +419,6 @@ bool Processor::interCoreAllocation(float Ub)
                         offsets_c[core] = tmp;
                     }
                 }
-
             }
             
             // Remove the assignment and restore the offsets
@@ -507,40 +526,53 @@ bool Processor::interCoreAllocation(float Ub)
                 core->removeFunction(affine_elem.first);
             }
             
+            //std::cout << "Affine set de-allocated" << std::endl;
+            
             // The affine set must be re-allocated
             for (auto f : affine_set)
                 NAR.push_back(f.first);
             
             // Offsets and schedulability analysis must be computed again
             
-            std::map<Function*, float> tmp_resp_t = getResponseTimes();
-            std::map<Function*, float> resp_times;
+            std::map<Function*, float> tmp_compl_t = getCompletionTimes();
+            std::map<Function*, float> compl_times;
             long limit = 0;
             
             //clearOffsets();
             
-            while (tmp_resp_t != resp_times && ++limit < 100)
+            while (tmp_compl_t != compl_times && ++limit < 200)
             {
                 // old response times = current response times
-                resp_times = tmp_resp_t;
+                compl_times = tmp_compl_t;
                 
                 // Set new offsets
                 setNewOffsets();
                 
                 // compute new response times
-                tmp_resp_t = getResponseTimes();
+                tmp_compl_t = getCompletionTimes();
             }
             
-            if (tmp_resp_t != resp_times)
+            bool is_sched = checkSchedulability();
+            if (tmp_compl_t != compl_times || is_sched == false)
             {
                 //std::cout << "ERROR: I removed the affine set and I am not able"
                 //<< " to find a schedulable solution anymore" << std::endl;
+                errors << "ERROR" << std::endl;
                 return false;
             }
             
         }
 
     } // while( NAR.size() != 0 )
+    
+//    print(std::cout);
+    
+    computeRT();
+//    auto memory_before = total_size;
+//    optimizeRT2();
+//    std::cout << "Total memory before and after: " << memory_before << " -> "
+//    <<  total_size << std::endl;
+    errors.close();
     return true;
 }
         
@@ -582,34 +614,133 @@ TaskSet* Processor::getCore(Function *f)
 
 void Processor::optimizeRT2()
 {
-    // Allocate runnable
-    // If the worst offset is with respect to core, assign runnable
-    // without offset, otherwise assign with offset
+    std::map<TaskSet*, std::pair<Function*, Function*>> worst_links;
+    std::map<TaskSet*, long> worst_links_size;
     
-    // Take the new response times
-    auto resp_time = getResponseTimes();
+    // This for loop MUST be executed only once and only here.
+    // Each time you call core->getLink(), the previous (bigger) link is
+    // discarded.
+    for (auto core : cores)
+    {
+        auto link = core->getLink();
+        if (link.first != nullptr && link.second != nullptr)
+        {
+            worst_links[core] = link;
+            worst_links_size[core] = link.first->getLinkSize(link.second);
+        }
+    }
     
-    // 
+    TaskSet *CORE = (*worst_links.begin()).first;
     
-    
-//    // The offsets I use
-//    std::map<Task*, float> offsets;
-//    
-//    // Resolve fixed point problem
-//    int limit = 0;
-//    while (tmp_resp_t != resp_times && ++limit < 100)
-//    {
-//        //std::cout << "Trying to converge" << std::endl;
-//        // old response times = current response times
-//        resp_times = tmp_resp_t;
-//        
-//        // Set new offsets
-//        offsets = setNewOffsets();
-//        
-//        // compute new response times
-//        tmp_resp_t = getResponseTimes();
-//    }
-//    offsets = setNewOffsets();
+    while (worst_links.size() != 0)
+    {
+        // Determine the taskset with the heaviest link
+        // CORE is the TaskSet to optimize
+        CORE = (*worst_links_size.begin()).first;
+        auto size = (*worst_links_size.begin()).second;
+        
+        for (auto l : worst_links_size)
+        {
+            if (l.second > size)
+            {
+                CORE = l.first;
+                size = l.second;
+            }
+        }
+        
+        computeRT();
+        
+        auto memory_before = total_size;
+        //auto cores_backup = cores;
+        auto orig_offsets = getOffsets();
+        
+#ifdef DEBUG_ICA
+        std::cout << "optimizing: " << worst_links[CORE].first->getName()
+        << " -> " << worst_links[CORE].second->getName() << std::endl;
+#endif
+        // One step optimization
+        auto LINK = worst_links.at(CORE);
+        Function* source_f = LINK.first;
+        Function* destin_f = LINK.second;
+        
+        CORE->optimize(source_f, destin_f);
+        
+        // Re-compute the RT blocks
+        computeRT();
+        
+        // If the optimization lead to a higer memory cost, I have to discard this
+        // optimization and restore the previous taskset
+        if (memory_before < total_size)
+        {
+            //std::cout << "Before: " << memory_before << ", After: " << total_size << std::endl;
+            
+            CORE->undoOptimize();
+            
+            computeRT();
+            
+            if (memory_before < total_size)
+            {
+                
+                std::cout << "ERROR: restored bad solution but still bad" << std::endl;
+                std::cout << "Before: " << memory_before << ", After: " << total_size << std::endl;
+
+                exit(-1);
+            }
+        }
+        else
+        {
+            std::map<Function*, float> tmp_comple_t = getCompletionTimes();
+            std::map<Function*, float> comple_times;
+            long limit = 0;
+            
+            // Try to find a convergent solution
+            clearOffsets();
+            while (tmp_comple_t != comple_times && ++limit < 100)
+            {
+                // old response times = current response times
+                comple_times = tmp_comple_t;
+                
+                // Set new offsets
+                setNewOffsets();
+                
+                // compute new response times
+                tmp_comple_t = getCompletionTimes();
+            }
+            
+            bool is_sched = checkSchedulability();
+            
+            if (tmp_comple_t != comple_times || is_sched == false)
+            {
+                CORE->undoOptimize();
+                
+                // Restore offsets
+                for (auto core : cores)
+                    for (auto task : core->getTs())
+                        task->setOffset(orig_offsets[task]);
+            }
+            
+            // Confirm the optimization only if the solution is schedulable
+            else if ( tmp_comple_t == comple_times && is_sched == true)
+                CORE->confirmOptimization();
+        }
+        
+        // Take the next link to optimize for CORE
+        auto new_link = CORE->getLink();
+        source_f = new_link.first;
+        destin_f = new_link.second;
+        
+        if (source_f != nullptr && destin_f != nullptr)
+        {
+            worst_links[CORE] = new_link;
+            worst_links_size[CORE] = source_f->getLinkSize(destin_f);
+        }
+        else
+        {
+            worst_links.erase(CORE);
+            worst_links_size.erase(CORE);
+        }
+        
+    }
 }
 
 

@@ -62,6 +62,9 @@ class Processor {
     // Returns the response time for each allocated runnable
     std::map<Function*, float> getResponseTimes();
     
+    // Returns the response time for each allocated runnable
+    std::map<Function*, float> getCompletionTimes();
+    
     bool checkSchedulability(std::map<Function*, float>&);
     
     bool checkSchedulability();

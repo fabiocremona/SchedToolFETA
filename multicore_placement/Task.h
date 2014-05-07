@@ -41,6 +41,8 @@ public:
     Task(std::string, long, std::vector<Function* >&);
     Task(std::string, long);
     ~Task();
+    Task(const Task& other);
+	Task& operator = (const Task& other);
     
     bool isMy(Function* );
     
@@ -66,6 +68,10 @@ public:
     long getP();
     
     float getWcet();
+    
+    void getFunctionSet(std::vector<Function* >*, int);
+    
+    void replaceFunctions(std::vector<Function*>);
 };
 
 

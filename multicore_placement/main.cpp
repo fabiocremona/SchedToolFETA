@@ -20,116 +20,146 @@
 
 #include <iostream>
 #include <fstream>
+#include <stdlib.h>
 #include <omp.h>
-
+#include <time.h>
 
 #include "Parser.h"
 #include "TaskSet.h"
 #include "RtwOpt.h"
-#include "Processor.h"
+#include "Allocation.h"
+#include "sa_solver.h"
 
-#include <stdio.h>
-#include <stdlib.h>
 
-#define MULTIPLIER 99999999999999
-
-// Arguments:
-// #cores, Ub
+#define NI 20
+#define NC 4
 
 int main( int argc, const char*   argv[] )
 {
-    
+
+    time_t rawtime;
+    time (&rawtime);
+    std::cout << "Start at: " << ctime (&rawtime) << std::endl;
     // number of cores
-    int NI = 100;
     
-    std::string nc = argv[1];
-    int NC = (int)atof(nc.c_str());
-    
-    std::string ub = argv[2];
-    int UB = (int)atof(ub.c_str());
-    
-    ofstream output;
-    output.open("results.txt");
-    
+
+    //std::string nc = argv[1];
+    //int NC = (int)atof(nc.c_str());
+
     // enable random seed
     srand(unsigned(time(NULL)*99999999999999));
-    std::map<float, float> results;
-    int occurs = 0;
+
+    ofstream results_p;
+    results_p.open("results.txt");
+
+
+    std::vector<int> occurs_vector;
+    for (int i = 10; i <= (NC*10); i++)
+        occurs_vector.push_back(0);
+    std::vector<int> memory_vector;
+    for (int i = 10; i <= (NC*10); i++)
+        memory_vector.push_back(0);
     
-    for (auto u = 10; u <= (NC*10); u += 1)
+    std::vector<int> occurs_vector_sa;
+    for (int i = 10; i <= (NC*10); i++)
+        occurs_vector_sa.push_back(0);
+    std::vector<int> memory_vector_sa;
+    for (int i = 10; i <= (NC*10); i++)
+        memory_vector_sa.push_back(0);
+    
+    std::vector<float> memory_relative;
+    for (int i = 10; i <= (NC*10); i++)
+        memory_relative.push_back(0);
+
+    #pragma omp parallel for
+    for (auto c = 10; c <= (NC*10); c++)
     {
-        occurs = 0;
-        
+
+        float load = c / 10.0;
+
         #pragma omp parallel for
         for (auto i = 0; i < NI; i++)
         {
-            float U = u / 10;
-            std::string tgff_file_name = "test_graph" + to_string(int(u)) + "_" + to_string(i);
+
+            // Function graph generation
+
+            std::string tgff_file_name = "test_graph" + to_string(c) + "_" + to_string(i);
+
             ofstream input;
             input.open(tgff_file_name + ".tgffopt");
-            
+
             std::string graph = "tg_cnt 1\ntask_cnt 10 5\nprob_multi_start_nodes 1\nstart_node 2 1\ntg_write\neps_write";
-            graph = "seed " + to_string(int(u*i*1000)) + "\n" + graph;
-            
+            graph = "seed " + to_string(int(c*(i+1)*1000)) + "\n" + graph;
+
             input << graph;
             input.close();
-            
-            #pragma omp critical
-            {
+
             std::string command = "./tgff " + tgff_file_name;
             system(command.c_str());
-            }
+
+            // Function FETA generation
             
-            Parser ps0(tgff_file_name + ".tgff", to_string(U));
+            Parser ps0(tgff_file_name + ".tgff", load);
             ps0.create();
-            
-            #pragma omp critical
-            {
-                output << "Load: " << U << " - Iteration: " << i << std::endl;
-                output << "Functions: " << std::endl;
-                for (auto f : ps0.getFunctions())
-                    f->print(output);
-                std::cout << "Load: " << U << " - Iteration: " << i << std::endl;
-            }
+
+            // Pseudo Gready Slacker
             
             Processor p0(ps0.getFunctions(), NC);
-            bool is_sched = p0.interCoreAllocation(UB);
+            bool is_sched_gs = p0.interCoreAllocation(0.2);
+            if (is_sched_gs == true)
+            {
+                #pragma omp atomic
+                occurs_vector[c-10]++;
+            }
             
-            if (is_sched == true)
+            
+            // Simulating Annealing
+            
+            TaskSet ts0(*ps0.singleFunctionTask());
+            Allocation alloc(&ts0, NC);
+            Allocation alloc_final;
+            alloc_final = sa_solver(alloc);
+            alloc_final.computeRT();
+            
+            bool is_sched_sa = alloc_final.checkSchedulability();
+            if (is_sched_sa == true)
             {
-                #pragma omp critical
+                #pragma omp atomic
+                occurs_vector_sa[c-10]++;
+            }
+            
+            if (is_sched_gs && is_sched_sa)
+            {
+                #pragma omp critical(dataupdate)
                 {
-                    output << "Solution schedulable" << std::endl;
-                    p0.print(output);
-                    occurs++;
+                    memory_vector[c-10] += p0.getRT();
+                    memory_vector_sa[c-10] += alloc_final.getRT();
+                    float local_p = ( p0.getRT() - alloc_final.getRT() ) /
+                                    ( p0.getRT() + alloc_final.getRT() ) * 100;
+                    
+                    memory_relative[c-10] = ( memory_relative[c-10] + local_p ) / 2.0;
                 }
             }
-            else
-            {
-                #pragma omp critical
-                {
-                    output << "Solution NOT schedulable" << std::endl;
-                }
-            }
-        }
-        #pragma omp critical
-        {
-            results[u] = occurs/NI*100;
-            output << "===> Schedulability: " << occurs/NI*100 << "%" << std::endl;
-            std::cout << "===> Schedulability: " << occurs/NI*100 << "%" << std::endl;
         }
     }
-    
-    ofstream results_p;
-    results_p.open("results_percentage.txt");
-    for (auto r : results)
-        results_p << r.first << "\t" << r.second << std::endl;
+
+    #pragma omp critical(output)
+    {
+        float load = 1.0;
+        results_p << "Load\tGS\tSA\tM_GS\tM_SA" << std::endl;
+        for (auto i = 0; i < occurs_vector.size(); i++)
+        {
+            results_p << load << "\t" << occurs_vector[i] << "\t"
+            << occurs_vector_sa[i] << "\t" << memory_vector[i] << "\t"
+            << memory_vector_sa[i] << std::endl;
+            
+            load += 0.1;
+        }
+    }    
+
     results_p.close();
-    
-    
-    output.close();
+
+    time (&rawtime);
+    std::cout << "End at: " << ctime (&rawtime) << std::endl;
     return 0;
 }
-
-
-

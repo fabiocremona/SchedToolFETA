@@ -33,24 +33,28 @@
 
 class Parser {
     std::string source_file;
+    std::string mapping_file;//specifies block to function mapping
     std::string graph_file;
     std::string feta_file;
+    float Up;
     
     std::vector<Component *> components;
     std::map<std::string, Function*> functions;
     std::vector<Task *> *tasks;
-    void checkFunctions();
     
-    float Up;
+    void checkFunctions();
     void setUb();
     
 public:
     Parser(std::string);
+    Parser(std::string, float);
     Parser(std::string, std::string);
     ~Parser();
     void create();
+    void createFromFile();//Peng
     std::vector<Function*> getFunctions();
     std::vector<Task* > * getRMTS();
+    std::vector<Task* > * singleFunctionTask();
 };
 
 

@@ -38,7 +38,8 @@ Function::Function(std::string n)
         computeFeta();
     }
     
-    
+    // I try to reduce the size of the functions. I don't need blocks anymore.
+    blocks.clear();
     
     std::vector<int> base_periods;
     base_periods.push_back(1);
@@ -79,6 +80,24 @@ Function::~Function()
     for (auto block : blocks)
         delete block;
     
+}
+
+void Function::setFeta(std::vector<float> p)
+{
+	places = p;
+}
+
+long Function::getLinkSize(Function *f)
+{
+    if (f == nullptr)
+        return -1;
+    
+    if (successors.find(f) != successors.end())
+        return successors.at(f);
+    else if (predecessors.find(f) != predecessors.end())
+        return predecessors.at(f);
+    else
+        return -1;
 }
 
 void Function::computeFeta()

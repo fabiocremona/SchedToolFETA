@@ -37,7 +37,7 @@ bool periodsort(Task* a, Task* b)
 
 TaskSet::TaskSet()
 {
-    
+    last_link_size = -1;
 }
 
 TaskSet::TaskSet(std::vector<Task*>& ts)
@@ -58,11 +58,216 @@ TaskSet::TaskSet(std::vector<Task*>& ts)
             period = gcd(period, (*i)->getPeriod());
     
     std::sort(taskset.begin(), taskset.end(), tasksort);
+    
+    
 }
 
 TaskSet::~TaskSet()
 {
     
+}
+
+TaskSet::TaskSet(const TaskSet& other)
+{
+	for(int i=0; i< other.taskset.size(); i++)
+	{
+		Task *t = new Task(*other.taskset[i]);
+		taskset.push_back(t);
+	}
+	period = other.period;
+	places = other.places;
+	rbf = other.rbf;
+	rbfs = other.rbfs;
+	response_t = other.response_t;
+	slaks = other.slaks;
+	total_size = other.total_size;
+	rt2_size = other.rt2_size;
+	rt1_size = other.rt1_size;
+    //rt2s = other.rt2s;
+}
+
+TaskSet& TaskSet::operator = (const TaskSet& other)
+{
+	if(!taskset.empty())
+	{
+		for(int i=0;i<taskset.size();i++)
+		{
+			delete taskset[i];
+		}
+		taskset.clear();
+	}
+    
+	for(int i=0; i < other.taskset.size(); i++)
+	{
+		Task *t = new Task(*other.taskset[i]);
+		taskset.push_back(t);
+	}
+	period = other.period;
+	places = other.places;
+	rbf = other.rbf;
+	rbfs = other.rbfs;
+	response_t = other.response_t;
+	slaks = other.slaks;
+	total_size = other.total_size;
+	rt2_size = other.rt2_size;
+	rt1_size = other.rt1_size;
+	//rt2s = other.rt2s;
+	return *this;
+}
+
+void TaskSet::getSyncSet(std::vector<Function*>*sync_set, Function *f)
+{
+    for (auto i = f->getPredecessors().begin();
+         i != f->getPredecessors().end(); i++)
+    {
+        auto check = std::find(sync_set->begin(), sync_set->end(), (*i).first);
+        if (f->getPeriod() == (*i).first->getPeriod() &&
+            check == sync_set->end())
+        {
+            sync_set->push_back((*i).first);
+            getSyncSet(sync_set, (*i).first);
+        }
+    }
+    
+    for (auto i = f->getSuccessors().begin();
+         i != f->getSuccessors().end(); i++)
+    {
+        auto check = std::find(sync_set->begin(), sync_set->end(), (*i).first);
+        if (f->getPeriod() == (*i).first->getPeriod() &&
+            check == sync_set->end())
+        {
+            sync_set->push_back((*i).first);
+            getSyncSet(sync_set, (*i).first);
+        }
+    }
+}
+
+std::pair<Function*, Function*> TaskSet::getLink()
+{
+
+    
+    
+    long width = -1;
+    std::pair<Function*, Function*> tmp_link = std::make_pair(nullptr, nullptr);
+    
+    if (last_link_size == -1)
+    {
+        for (auto i = rt2s.begin(); i != rt2s.end(); i++)
+        {
+            if ((*i).second > width)
+            {
+                width = (*i).second;
+                tmp_link = (*i).first;
+            }
+        }
+    }
+    
+    else
+    {
+        for (auto i = rt2s.begin(); i != rt2s.end(); i++)
+        {
+            auto l = std::find(last_links.begin(),
+                               last_links.end(), (*i).first);
+            if ((*i).second > width &&
+                (*i).second <= last_link_size && l == last_links.end())
+            {
+                width = (*i).second;
+                tmp_link = (*i).first;
+            }
+        }
+    }
+    
+    last_links.push_back(tmp_link);
+    last_link_size = width;
+    
+//    std::cout << "Taskset: " << this << std::endl;
+//    for (auto l : rt2s)
+//        std::cout << l.first.first->getName() << " - > "
+//        << l.first.second->getName() << std::endl;
+    
+    
+    return tmp_link;
+}
+
+void TaskSet::optimize(Function* s, Function* d)
+{
+    src_funs.clear();
+    dst_funs.clear();
+    
+    // Get the synchronous set of the source function
+    std::vector<Function*> sync_set;
+    sync_set.push_back(s);
+    getSyncSet(&sync_set, s);
+    
+    // Get the task where the Synchronous Set is mapped
+    src_task = getTask(s);
+    
+    // Get the task where the Synchronous Set will be mapped
+    dst_task = getTask(d);
+    
+    if (src_task == nullptr || & dst_task == nullptr)
+    {
+        std::cout << "null task: - src: " << s->getName()
+        << " - dst: " << d->getName() << std::endl;
+        std::cout << "Functions: " << std::endl;
+        for (auto f : functions)
+            std::cout << f->getName() << std::endl;
+        exit(-1);
+    }
+    
+    if (s != nullptr && d != nullptr &&
+        src_task != nullptr && dst_task != nullptr)
+    {
+        auto funs0 = src_task->getFunctions();
+        for (auto f : funs0)
+            src_funs.push_back(f);
+        
+        // Remove the Synchronous Set from the task.
+        src_task->remove(&sync_set);
+        
+        // Remove the task from the taskset if it is empty
+        if (src_task->getFunSize() == 0)
+        {
+            auto f = std::find(taskset.begin(), taskset.end(), src_task);
+            taskset.erase(f);
+        }
+        
+
+        // Save the origilal function configuration of dst_task
+        auto funs1 = dst_task->getFunctions();
+        for (auto f : funs1)
+            dst_funs.push_back(f);
+        
+        // Add the Synchronous Set to the destination task
+        dst_task->add(&sync_set);
+    }
+    //adjustPriorities();
+}
+
+void TaskSet::undoOptimize()
+{
+
+    // If the original task is empty, re-add it to the taskset
+    if (src_task->getFunSize() == 0)
+    {
+        //add(src_task);
+        taskset.push_back(src_task);
+        std::sort(taskset.begin(), taskset.end(), tasksort);
+    }
+    
+    // Add the SynchronousSet to the original task
+    src_task->replaceFunctions(src_funs);
+    
+    // Remove the Synchronous Set from the current task
+    dst_task->replaceFunctions(dst_funs);
+
+    //adjustPriorities();
+}
+
+void TaskSet::confirmOptimization()
+{
+//    if (src_task->getFunSize() == 0)
+//        delete src_task;
 }
 
 void TaskSet::computeFeta()
@@ -178,21 +383,6 @@ bool TaskSet::isEmpty()
     return true;
 }
 
-
-bool TaskSet::checkInterval(long s, long e)
-{
-    long start = s;
-    long intermedie = s + period;
-    for (auto i = s; i < e; i+=period)
-    {
-        if (getRbf(start) >= i && getRbf(start) <= (i+period))
-            return true;
-        start += period;
-        intermedie += period;
-    }
-    return false;
-}
-
 bool TaskSet::checkSchedulability()
 {
     std::vector<Task* > tmp_tasks;
@@ -245,8 +435,6 @@ bool TaskSet::checkSchedulability()
 
 bool TaskSet::computeResponseTimeO()
 {
-    
-    
     // period: is the period of the FETA
     // this_task->getPeriod(): is the task period
     
@@ -265,8 +453,6 @@ bool TaskSet::computeResponseTimeO()
     std::cout << "period: " << period << ", this_task->getPeriod(): "
     << this_task->getPeriod() << std::endl;
 #endif
-    
-    
     
     // Take all the time instants at which the rbf change value
     std::vector<long> time_instants;
@@ -325,6 +511,7 @@ bool TaskSet::computeResponseTimeO()
         
         for (auto ti : time_instants)
         {
+            
 #ifdef DEBUG_RT
             std::cout << "ti: " << ti << std::endl;
 #endif
@@ -356,7 +543,7 @@ bool TaskSet::computeResponseTimeO()
                 ", (time-period): " << (time-period) << ", time: " << time
                 << std::endl;
 #endif
-                if ( getRbf(i) > (time-period) && getRbf(i) <= time )
+                if ( getRbf(i) <= time )
                 {
 #ifdef DEBUG_RT
                     std::cout << "+++getRbf(i): " << getRbf(i) <<
@@ -778,81 +965,6 @@ void TaskSet::addFunction(Function *f, float offset)
     std::sort(taskset.begin(), taskset.end(), tasksort);
 }
 
-float TaskSet::addFunction(Function *f, Processor* p)
-{
-    bool allocated = false;
-    
-    // If already exist a task running at the same period of function "f"
-    //  add f to this task
-    for (auto task : taskset)
-    {
-        if (task->getPeriod() == f->getPeriod())
-        {
-            task->add(f);
-            
-            // Change the offset of the task if the previous offset is smaller
-            //  than the new one
-            if (task->getOffset() < offset)
-                task->setOffset(offset);
-            
-            allocated = true;
-        }
-    }
-    
-    // The runnable has not been allocated on previous tasks and a new task
-    //  must be created for it
-    if (allocated == false)
-    {
-        // Decrease priority of tasks with higher period
-        for (auto task : taskset)
-            if (task->getPeriod() > f->getPeriod())
-                task->changePriority(task->getPriority() + 1);
-        
-        // Create the new task
-        Task* new_task = new Task();
-        new_task->add(f);
-        taskset.push_back(new_task);
-        
-        // Set the offset for the new task
-        new_task->setOffset(offset);
-        
-        // Re-assign priorities
-        // Get tasks with lower period
-        for (auto task : taskset)
-            if (task->getPeriod() > f->getPeriod())
-                task->changePriority(task->getPriority() + 1);
-        
-        std::vector<long> priorities;
-        for (auto task : taskset)
-            if (task->getPeriod() < f->getPeriod())
-                priorities.push_back(task->getPriority());
-        
-        if (priorities.size() == 0)
-            priorities.push_back(0);
-        
-        auto priority = (*(std::max_element(priorities.begin(), priorities.end()))) + 1;
-        
-        // Set the priority of the new task
-        new_task->changePriority(priority);
-    }
-    
-    // Compute Period
-    for (auto task : taskset)
-    {
-        if (task->getFunSize())
-        {
-            period = task->getPeriod();
-            break;
-        }
-    }
-	for (auto i = taskset.begin(); i != taskset.end(); i++)
-        if ((*i)->getFunSize())
-            period = gcd(period, (*i)->getPeriod());
-    
-    std::sort(taskset.begin(), taskset.end(), tasksort);
-    return 0;
-}
-
 void TaskSet::removeFunction(Function *f)
 {
     bool erased = false;
@@ -933,14 +1045,6 @@ void TaskSet::remove(Feta *t)
     }
 }
 
-void TaskSet::moveFunctions(std::vector<Function*> *f, Task *t)
-{
-    for (auto i = taskset.begin(); i != taskset.end(); i++)
-        (*i)->remove(f);
-    t->add(f);
-    computeFeta();
-}
-
 long TaskSet::getPriority(Function *f)
 {
     for (auto k = taskset.begin(); k != taskset.end(); k++)
@@ -980,7 +1084,8 @@ bool TaskSet::isMy(Task *t)
 bool TaskSet::isMy(Function *f)
 {
     for (auto task : taskset)
-        if (task->isMy(f)) return true;
+        if (task->isMy(f) == true)
+            return true;
     return false;
 }
 
@@ -1004,11 +1109,24 @@ void TaskSet::adjustPriorities()
         task->changePriority(p++);
 }
 
+void TaskSet::refreshFunctions()
+{
+    functions.clear();
+    for (auto task : taskset)
+    {
+        auto FUNCTIONS = task->getFunctions();
+        for (auto fun : FUNCTIONS)
+            functions.push_back(fun);
+    }
+}
+
 void TaskSet::computeRT()
 {
     total_size = 0;
     rt2_size = 0;
     rt1_size = 0;
+    
+    rt2s.clear();
     
     // For each task
     for (auto task : taskset)
@@ -1017,34 +1135,68 @@ void TaskSet::computeRT()
         for (auto function : task->getFunctions())
         {
             // for each successor of the function
-            for (auto succ : function->getSuccessors())
+            auto successors = function->getSuccessors();
+            for (auto succ : successors)
             {
                 // RT1 blocks
                 // It should be added the additional condition upon the response
                 // time of the receiver:
                 // {&& responseTime(succ) < period(function)}
-                if (isMy(succ.first) && getPriority(succ.first) > getPriority(function))
+                Function* successor = succ.first;
+                long size = succ.second;
+                
+                bool is_my = false; //isMy(successor);
+                refreshFunctions();
+                for (auto f : functions)
+                    if (successor == f)
+                        is_my = true;
+                
+                
+                if (is_my &&
+                    getPriority(successor) > getPriority(function))
                 {
-                    rt1_size += succ.second;
+                    rt1_size += size;
                     
                     // If the periods are not harmonic, add a RT2
-                    if (succ.first->getPeriod() % function->getPeriod() != 0)
-                        rt2_size += (2 * succ.second);
+                    if (successor->getPeriod() % function->getPeriod() != 0)
+                        rt2_size += (2 * size);
                 }
+                
                 // RT2 blocks
-                if (isMy(succ.first) && getPriority(succ.first) < getPriority(function))
+                
+                //                bool is_my = false;
+                //                for (auto task : taskset)
+                //                {
+                //                    auto functions_ = task->getFunctions();
+                //                    for (auto f : functions_)
+                //                    {
+                //                        if (f == successor)
+                //                            is_my = true;
+                //                    }
+                //                }
+                
+                if (is_my &&
+                    (getPriority(successor) < getPriority(function)))
                 {
-                    rt2_size += (2 * succ.second);
+                    rt2_size += (2 * size);
+                    
+                    std::pair<Function*, Function*> link;
+                    link = std::make_pair(function, successor);
+                    rt2s[link] = size;
                     
                     // If the periods are not harmonic, add a RT1
                     if (function->getPeriod() % succ.first->getPeriod() != 0)
-                        rt1_size += succ.second;
+                        rt1_size += size;
                 }
             }
         }
     }
-    
     total_size = rt1_size + rt2_size;
+    
+//    std::cout << "Taskset: " << this << std::endl;
+//    for (auto l : rt2s)
+//        std::cout << l.first.first->getName() << " - > "
+//        << l.first.second->getName() << std::endl;
 }
 
 long TaskSet::getRT1()
@@ -1072,5 +1224,123 @@ float TaskSet::getLoad()
         load = load + (p * period);
     return (load / (places.size() * period) );
 }
+
+
+void TaskSet::randomSwapPriorities()
+{
+	if (taskset.size() == 1)
+	{
+		return;
+	}
+	int p1 = rand()%taskset.size();
+	int p2;
+	do{
+		p2 = rand()%taskset.size();
+	}while(p1 == p2);
+	
+	//std::cout<<"p1: "<<p1<<"   p2: "<<p2<<"   taskset.size(): "<<taskset.size()<<std::endl;
+	
+	auto t1 = p1 + taskset.begin();
+	auto t2 = p2 + taskset.begin();
+	
+	auto prio1 = (*t1)->getPriority();
+	auto prio2 = (*t2)->getPriority();
+	
+	(*t1)->changePriority(prio2);
+	(*t2)->changePriority(prio1);
+	
+	std::sort(taskset.begin(), taskset.end(), tasksort);
+	
+}
+
+void TaskSet::randomPartition()
+{
+	//std::cout<<"Partition begins..."<<std::endl;
+	//srand(1);
+	//check if each of all the tasks has only one function, we do merge instead of parition.
+	bool check = false;
+	for(auto it = taskset.begin();it!=taskset.end();it++)
+	{
+		if((*it)->getFunSize() != 1)
+		{
+			check = true;
+		}
+	}
+	if(!check)
+	{
+		randomMerge();
+		//std::cout<<"each task has only one function..."<<std::endl;
+		return;
+	}
+	auto src = taskset.begin()+rand()%taskset.size();
+	int newFunSize = rand()%(*src)->getFunSize() + 1;
+	while((*src)->getFunSize() == 1){
+		src = taskset.begin()+rand()%taskset.size();
+		newFunSize = rand()%(*src)->getFunSize() + 1;
+	}
+	if (newFunSize == (*src)->getFunSize())
+		newFunSize = newFunSize - 1;
+	std::vector<Function* > fs;
+	(*src)->getFunctionSet(&fs,newFunSize);
+	Task* new_task = new Task();
+	new_task->add(&fs);
+	//std::cout<<"partition bug..."<<std::endl;
+	//(*this).printTs(std::cout);
+	(*src)->remove(&fs);
+	add(new_task);
+	//set random priority for the new task
+	//auto i = std::find(taskset.begin(), taskset.end(), new_task);
+	int new_prio = rand()%taskset.size()+1;
+	(*new_task).changePriority(new_prio);
+	//(*i)->changePriority(new_prio);
+	adjustPriorities();
+	//std::cout<<"Partition ends..."<<std::endl;
+	
+}
+
+void TaskSet::randomMerge()
+{
+	//std::cout<<"Merge begins..."<<std::endl;
+	//(*this).printTsExt(std::cout);
+	if(taskset.size() == 1)
+	{
+		//std::cout<<"critical situation.....!!!"<<std::endl;
+		//auto i = taskset.begin();
+		/*if((*i)->getFunSize() != 1)
+         {
+         randomPartition();
+         }*/
+		return;
+	}
+	int p1 = rand()%taskset.size();
+	int p2;
+	
+	do{
+		p2 = rand()%taskset.size();
+	}while(p1 == p2);
+	
+	auto t1 = p1 + taskset.begin();
+	auto t2 = p2 + taskset.begin();
+	
+	std::vector<Function* > fs;
+	fs = (*t2)->getFunctions();
+	
+	(*t1)->add(&fs);
+	
+	//(*t2)->remove(&fs);
+	
+	remove(*t2);
+	//(*this).printTs(std::cout);
+	//std::sort(taskset.begin(), taskset.end(), tasksort);
+	adjustPriorities();
+	//std::cout<<"Merge ends..."<<std::endl;
+}
+
+long TaskSet::getTaskSetSize()
+{
+	return taskset.size();
+}
+
+
 
 

@@ -46,6 +46,12 @@ void Component::connect(Function* src, Function* dst)
     functions[dst->getName()]->addPredecessor(src, bus_size);
 }
 
+void Component::connect(Function* src, Function* dst, long bus_size)
+{
+    functions[src->getName()]->addSuccessor(dst, bus_size);
+    functions[dst->getName()]->addPredecessor(src, bus_size);
+}
+
 void Component::setUtilizationBound(float uc)
 {
     for (auto i = functions.begin(); i != functions.end(); i++)

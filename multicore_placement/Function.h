@@ -55,6 +55,8 @@ public:
     const std::map<Function*, long>& getSuccessors();
     const std::vector<Block*> getBlocks() {return blocks;};
     
+    long getLinkSize(Function*);
+    
     void addSuccessor(Function*, long);
     void addPredecessor(Function*, long);
     void removeSuccessor(Function*);
@@ -66,8 +68,11 @@ public:
     long getSizePreds() {return predecessors.size();};
     long getSizeSuccs() {return successors.size();};
     
+    void setFeta(std::vector<float>);//Peng
     void add(Feta*);
     void remove(Feta*);
+    
+    
 };
 
 

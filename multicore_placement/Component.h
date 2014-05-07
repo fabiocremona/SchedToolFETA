@@ -38,6 +38,7 @@ public:
     
     void addFunction(Function *);
     void connect(Function *, Function *);
+    void connect(Function *, Function *, long);
     void setUtilizationBound(float);
     double get_uc();
     std::map<std::string, Function *>& getFunctions();

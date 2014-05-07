@@ -50,6 +50,28 @@ Task::~Task()
     
 }
 
+Task::Task(const Task& other)
+{
+	offset = other.offset;
+	name = other.name;
+	period = other.period;
+	priority = other.priority;
+	places = other.places;
+	functions = other.functions;
+}
+
+Task& Task::operator = (const Task &other)
+{
+	offset = other.offset;
+	name = other.name;
+	period = other.period;
+	priority = other.priority;
+	places = other.places;
+	functions = other.functions;
+	
+	return *this;
+}
+
 void Task::computeFeta()
 {
     if (functions.size() == 0)
@@ -72,12 +94,6 @@ void Task::computeFeta()
     for (auto i = 0 ; i < hyperperiod/period; i++)
         places.push_back(0);
     
-    
-//    if (offset != 0)
-//        period = gcd(period, offset);
-//    for (auto i = 0; i < (offset/period); i++)
-//        places.push_back(0);
-    
     for (auto i = places.begin(); i != places.end(); i++)
     {
         float wcet = 0;
@@ -91,9 +107,9 @@ void Task::computeFeta()
 
 bool Task::isMy(Function *f)
 {
-    auto i = std::find(functions.begin(), functions.end(), f);
-    if (i != functions.end())
-        return true;
+    for (auto ff : functions)
+        if (ff == f)
+            return true;
     return false;
 }
 
@@ -137,6 +153,7 @@ bool Task::removeC(Feta *f)
             name.erase(tmp0, tmp1);
             functions.erase(i);
             computeFeta();
+            
             return true;
         }
     }
@@ -243,3 +260,25 @@ float Task::getWcet()
         wcet += f->getFeta(0);
     return wcet;
 }
+
+void Task::getFunctionSet(std::vector<Function* >* fs, int funSize)
+{
+	auto f = functions.begin();
+	for(int i=0;i<funSize;i++)
+	{
+		fs->push_back(*f);
+		f++;
+	}
+}
+
+void Task::replaceFunctions(std::vector<Function *> new_funs)
+{
+    functions.clear();
+    name.clear();
+    places.clear();
+    
+    add(&new_funs);
+    
+}
+
+

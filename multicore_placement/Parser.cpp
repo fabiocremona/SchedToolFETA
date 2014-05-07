@@ -20,6 +20,7 @@
 #include "Parser.h"
 #include <stdlib.h>
 #include <algorithm>
+#define scale_factor 1
 
 Parser::Parser(std::string file)
 {
@@ -30,11 +31,47 @@ Parser::Parser(std::string file)
 }
 
 
+Parser::Parser(std::string file, float ub)
+{
+    source_file = file;
+    Up = ub;
+    tasks = new std::vector<Task* >;
+}
+
 Parser::Parser(std::string file, std::string up)
 {
     source_file = file;
-    Up = (float)atof(up.c_str());
-    tasks = new std::vector<Task* >;
+	//check whether up is a number or not. if not, it's the file for fecta
+	bool is_number = false;
+	std::string::const_iterator it = up.begin();
+	while(it != up.end())
+	{
+		if(!std::isdigit(*it) && (*it) != '.')
+		{
+			break;
+		}
+		else
+		{
+			it++;
+		}
+	}
+	if(it==up.end() && !up.empty())
+	{
+		is_number = true;
+		Up = (float)atof(up.c_str());
+		tasks = new std::vector<Task* >;
+		create();
+		//std::cout<<"use randomly generated input"<<std::endl;
+	}
+	else
+	{
+		feta_file = up;
+		tasks = new std::vector<Task* >;
+		createFromFile();
+		std::cout<<"use user input: "<<feta_file<<std::endl;
+	}
+    //Up = (float)atof(up.c_str());
+	//exit(1);
 }
 
 Parser::~Parser()
@@ -111,6 +148,87 @@ void Parser::create()
     checkFunctions();
 }
 
+//Peng
+void Parser::createFromFile()
+{
+    
+    std::ifstream source;
+    std::string line;
+    
+    try {
+        source.open(source_file.c_str());
+        
+    } catch (...) {
+        throw "unable to open mapping_file file";
+    }
+    
+    Component* comp_tmp = new Component("Default");
+	components.push_back(comp_tmp);
+    //add_component(_comp_tmp);
+    while (source.good()) {
+        std::string  type, name;
+        long period;
+        
+        getline(source, line);
+        std::istringstream linestream(line);
+        linestream >> type;
+        
+        if (type == "FUNCTION") {
+            linestream >> name;
+            linestream >> period;
+            
+			std::vector<float> places_tmp;
+			Function* fun_tmp = new Function(name,period,places_tmp);
+			functions[name] = fun_tmp;
+            components.back()->addFunction(fun_tmp);
+        }
+        if (type == "ARC") {
+            std::string from, to;
+			long bus_size;
+            linestream >> from;
+            linestream >> to;
+			linestream >> bus_size;
+			//components.back()->connect(functions[from], functions[to]);
+			components.back()->connect(functions[from], functions[to], bus_size);
+        }
+    }
+    source.close();
+	
+	std::ifstream feta_source;
+    std::string _line1;
+    try {
+        feta_source.open(feta_file.c_str());
+        
+    } catch (...) {
+        throw "unable to open _feta_file file";
+    }
+    while (feta_source.good()) {
+        std::string _name, _tmp;
+        float _val;
+        getline(feta_source, _line1);
+        std::istringstream _linestream(_line1);
+        
+        _linestream >> _tmp;
+        if (_tmp == "-") {
+            _linestream >> _name;
+            
+            //std::vector<Location *> *_feta = new std::vector<Location *>;
+            std::vector<float> feta;
+            
+            while (_linestream.good()) {
+                
+                _linestream >> _val;
+				feta.push_back(_val*scale_factor);
+            }
+			feta.pop_back();//This is probably a BUG, the last element will be read twice if not using this statement
+            functions[_name]->setFeta(feta);
+			//functions[_name]->getHyperperiod();
+        }
+    }
+    
+    feta_source.close();
+}
+
 std::vector<Task* > * Parser::getRMTS()
 {
     std::map<long, std::vector<Function *>* > tmp_tasks;
@@ -173,6 +291,25 @@ std::vector<Function*> Parser::getFunctions()
     for (auto f : functions)
         funs.push_back(f.second);
     return funs;
+}
+
+std::vector<Task* > * Parser::singleFunctionTask()
+{
+	auto p = 1;
+	for (auto i = components.begin();i != components.end();i++)
+	{
+		for(auto j = (*i)->getFunctions().begin();j!= (*i)->getFunctions().end();j++)
+		{
+			std::string tmp_name = (*j).second->getName();
+			std::vector<Function* > tmp_function;
+			tmp_function.push_back((*j).second);
+			Task *tmp = new Task(tmp_name, p, tmp_function);
+			tasks->push_back(tmp);
+			p++;
+		}
+	}
+    
+    return tasks;
 }
 
 
