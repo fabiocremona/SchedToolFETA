@@ -1,8 +1,10 @@
-#GTEST_DIR = /Usrs/fabiocremona/Documents/gtest-1.6.0
-CXXFLAGS = -Wall --std=c++11
+#CXXFLAGS = -Wall --std=c++11
+CXXFLAGS = -Wall --std=c++11 -fopenmp
 LDFLAGS =
-CPP = g++
-LD = g++
+#CPP = g++
+CPP = g++-mp-4.9
+#LD = g++
+LD = g++-mp-4.9
 
 #GTEST_HEADERS = $(STEST_DIR)/include/
 #LDFLAGS += $(GTEST_DIR)/src/gtest_amain.o
@@ -10,10 +12,11 @@ LD = g++
 
 .SUFFIXES:
 .SUFFIXES: .o .cpp
-EXECS = scmr
+EXECS = mcmr
 
 
-SRCS = main.cpp Component.cpp Parser.cpp Function.cpp Task.cpp Extras.cpp TaskSet.cpp Feta.cpp RtwOpt.cpp Block.cpp Processor.cpp
+SRCS = main.cpp Component.cpp Parser.cpp Function.cpp Task.cpp Extras.cpp TaskSet.cpp \
+		Feta.cpp RtwOpt.cpp Block.cpp Processor.cpp Allocation.cpp sa_solver.cpp
 
 OBJS = ${SRCS:.cpp=.o}
 
@@ -22,8 +25,8 @@ all: $(EXECS)
 .cpp.o:
 	$(CPP) $(CXXFLAGS) -c $<
 
-scmr: $(OBJS)
-	$(LD) $(LDFLAGS) -o $@ $^
+mcmr: $(OBJS)
+	$(LD) $(LDFLAGS) -fopenmp -o $@ $^
 
 clean:
 	rm -rf *.o
