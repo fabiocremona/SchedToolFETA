@@ -60,7 +60,7 @@ class TaskSet : public Feta {
     Task* dst_task;
     
     std::vector<Function*> src_funs;
-    std::vector<Function*> dst_funs;
+    std::vector<Function*> dst_funs;    
     
 public:
     

@@ -73,12 +73,6 @@ Function::Function(std::string n, long p, std::vector<float> fta)
 
 Function::~Function()
 {
-    for (auto i = predecessors.begin(); i != predecessors.end(); i++)
-        (*i).first->removeSuccessor(this);
-    for (auto i = successors.begin(); i != successors.end(); i++)
-        (*i).first->removePredecessor(this);
-    for (auto block : blocks)
-        delete block;
     
 }
 

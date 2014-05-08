@@ -59,6 +59,7 @@ TaskSet::TaskSet(std::vector<Task*>& ts)
     
     std::sort(taskset.begin(), taskset.end(), tasksort);
     
+    last_link_size = -1;
     
 }
 
@@ -83,7 +84,6 @@ TaskSet::TaskSet(const TaskSet& other)
 	total_size = other.total_size;
 	rt2_size = other.rt2_size;
 	rt1_size = other.rt1_size;
-    //rt2s = other.rt2s;
 }
 
 TaskSet& TaskSet::operator = (const TaskSet& other)
@@ -111,7 +111,6 @@ TaskSet& TaskSet::operator = (const TaskSet& other)
 	total_size = other.total_size;
 	rt2_size = other.rt2_size;
 	rt1_size = other.rt1_size;
-	//rt2s = other.rt2s;
 	return *this;
 }
 
@@ -124,8 +123,11 @@ void TaskSet::getSyncSet(std::vector<Function*>*sync_set, Function *f)
         if (f->getPeriod() == (*i).first->getPeriod() &&
             check == sync_set->end())
         {
-            sync_set->push_back((*i).first);
-            getSyncSet(sync_set, (*i).first);
+            if (isMy((*i).first))
+            {
+                sync_set->push_back((*i).first);
+                getSyncSet(sync_set, (*i).first);
+            }
         }
     }
     
@@ -136,17 +138,18 @@ void TaskSet::getSyncSet(std::vector<Function*>*sync_set, Function *f)
         if (f->getPeriod() == (*i).first->getPeriod() &&
             check == sync_set->end())
         {
-            sync_set->push_back((*i).first);
-            getSyncSet(sync_set, (*i).first);
+            if (isMy((*i).first))
+            {
+                sync_set->push_back((*i).first);
+                getSyncSet(sync_set, (*i).first);
+            }
         }
     }
 }
 
 std::pair<Function*, Function*> TaskSet::getLink()
 {
-
-    
-    
+ 
     long width = -1;
     std::pair<Function*, Function*> tmp_link = std::make_pair(nullptr, nullptr);
     
@@ -182,7 +185,7 @@ std::pair<Function*, Function*> TaskSet::getLink()
     
 //    std::cout << "Taskset: " << this << std::endl;
 //    for (auto l : rt2s)
-//        std::cout << l.first.first->getName() << " - > "
+//        std::cout << l.first.first->getName() << " -> "
 //        << l.first.second->getName() << std::endl;
     
     
@@ -205,7 +208,7 @@ void TaskSet::optimize(Function* s, Function* d)
     // Get the task where the Synchronous Set will be mapped
     dst_task = getTask(d);
     
-    if (src_task == nullptr || & dst_task == nullptr)
+    if (src_task == nullptr || dst_task == nullptr)
     {
         std::cout << "null task: - src: " << s->getName()
         << " - dst: " << d->getName() << std::endl;
@@ -215,8 +218,8 @@ void TaskSet::optimize(Function* s, Function* d)
         exit(-1);
     }
     
-    if (s != nullptr && d != nullptr &&
-        src_task != nullptr && dst_task != nullptr)
+    if (s != nullptr && d != nullptr)
+//        && src_task != nullptr && dst_task != nullptr)
     {
         auto funs0 = src_task->getFunctions();
         for (auto f : funs0)
@@ -1163,17 +1166,6 @@ void TaskSet::computeRT()
                 }
                 
                 // RT2 blocks
-                
-                //                bool is_my = false;
-                //                for (auto task : taskset)
-                //                {
-                //                    auto functions_ = task->getFunctions();
-                //                    for (auto f : functions_)
-                //                    {
-                //                        if (f == successor)
-                //                            is_my = true;
-                //                    }
-                //                }
                 
                 if (is_my &&
                     (getPriority(successor) < getPriority(function)))

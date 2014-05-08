@@ -92,7 +92,7 @@ class Processor {
     
     void printPercentage();
     
-    
+    float getMaxDiff(std::map<Function*, float>, std::map<Function*, float>);
 public:
     
     Processor(std::vector<Task* > , int);

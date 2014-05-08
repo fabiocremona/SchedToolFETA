@@ -21,8 +21,9 @@
 #include <iostream>
 #include <fstream>
 #include <stdlib.h>
-#include <omp.h>
+
 #include <time.h>
+#include <string>
 
 #include "Parser.h"
 #include "TaskSet.h"
@@ -30,9 +31,14 @@
 #include "Allocation.h"
 #include "sa_solver.h"
 
-
-#define NI 20
+#define NI 300
 #define NC 4
+
+
+
+#ifndef DEBUG
+#include <omp.h>
+#endif
 
 int main( int argc, const char*   argv[] )
 {
@@ -40,14 +46,18 @@ int main( int argc, const char*   argv[] )
     time_t rawtime;
     time (&rawtime);
     std::cout << "Start at: " << ctime (&rawtime) << std::endl;
-    // number of cores
     
-
+    // number of cores
     //std::string nc = argv[1];
     //int NC = (int)atof(nc.c_str());
 
-    // enable random seed
+    // Set SEED
+#ifdef DEBUG
+    srand(0);
+#endif
+#ifndef DEBUG
     srand(unsigned(time(NULL)*99999999999999));
+#endif
 
     ofstream results_p;
     results_p.open("results.txt");
@@ -70,21 +80,37 @@ int main( int argc, const char*   argv[] )
     std::vector<float> memory_relative;
     for (int i = 10; i <= (NC*10); i++)
         memory_relative.push_back(0);
-
-    #pragma omp parallel for
+    
+#ifndef DEBUG
+#pragma omp parallel for
+#endif
     for (auto c = 10; c <= (NC*10); c++)
     {
 
         float load = c / 10.0;
 
-        #pragma omp parallel for
+#ifndef DEBUG
+#pragma omp parallel for
+#endif
         for (auto i = 0; i < NI; i++)
         {
-
+#ifndef DEBUG
+#pragma omp critical(indexes)
+#endif
+            {
+            std::cout << "Load: " << c << ", iteration: " << i << std::endl;
+            }
+            
             // Function graph generation
-
+#ifndef DEBUG
             std::string tgff_file_name = "test_graph" + to_string(c) + "_" + to_string(i);
-
+            std::string command = "./tgff " + tgff_file_name;
+#endif
+#ifdef DEBUG
+            std::string tgff_file_name = "/Users/fabiocremona/Documents/SSSA-PhD/Works/FETA/multicore_placement/multicore_placement/test_graph" + to_string(c) + "_" + to_string(i);
+            std::string command = "/Users/fabiocremona/Documents/SSSA-PhD/Works/FETA/multicore_placement/multicore_placement/tgff " + tgff_file_name;
+#endif
+            
             ofstream input;
             input.open(tgff_file_name + ".tgffopt");
 
@@ -94,7 +120,7 @@ int main( int argc, const char*   argv[] )
             input << graph;
             input.close();
 
-            std::string command = "./tgff " + tgff_file_name;
+
             system(command.c_str());
 
             // Function FETA generation
@@ -108,13 +134,15 @@ int main( int argc, const char*   argv[] )
             bool is_sched_gs = p0.interCoreAllocation(0.2);
             if (is_sched_gs == true)
             {
-                #pragma omp atomic
+#ifndef DEBUG
+#pragma omp atomic
+#endif
                 occurs_vector[c-10]++;
             }
             
             
             // Simulating Annealing
-            
+#ifndef DEBUG
             TaskSet ts0(*ps0.singleFunctionTask());
             Allocation alloc(&ts0, NC);
             Allocation alloc_final;
@@ -124,13 +152,13 @@ int main( int argc, const char*   argv[] )
             bool is_sched_sa = alloc_final.checkSchedulability();
             if (is_sched_sa == true)
             {
-                #pragma omp atomic
+#pragma omp atomic
                 occurs_vector_sa[c-10]++;
             }
             
             if (is_sched_gs && is_sched_sa)
             {
-                #pragma omp critical(dataupdate)
+#pragma omp critical(dataupdate)
                 {
                     memory_vector[c-10] += p0.getRT();
                     memory_vector_sa[c-10] += alloc_final.getRT();
@@ -140,10 +168,12 @@ int main( int argc, const char*   argv[] )
                     memory_relative[c-10] = ( memory_relative[c-10] + local_p ) / 2.0;
                 }
             }
+#endif
         }
     }
 
-    #pragma omp critical(output)
+#ifndef DEBUG
+#pragma omp critical(output)
     {
         float load = 1.0;
         results_p << "Load\tGS\tSA\tM_GS\tM_SA" << std::endl;
@@ -156,7 +186,7 @@ int main( int argc, const char*   argv[] )
             load += 0.1;
         }
     }    
-
+#endif
     results_p.close();
 
     time (&rawtime);

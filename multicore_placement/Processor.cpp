@@ -22,6 +22,7 @@
 #include "Processor.h"
 #include <algorithm>
 #include <map>
+#include <cmath>
 
 //#define DEBUG_ICA
 
@@ -276,6 +277,16 @@ void Processor::printPercentage()
     << NAR.size() << std::endl;
 }
 
+float Processor::getMaxDiff(std::map<Function*, float> A, std::map<Function*, float> B)
+{
+    std::map<Function*, float> DIFF;
+    float max = 0;
+    for (auto f : A)
+        if (max < std::abs(A[f.first] - B[f.first]))
+            max = std::abs(A[f.first] - B[f.first]);
+    return max;
+}
+
 bool Processor::interCoreAllocation(float Ub)
 {
     //std::cout << "Starting allocating..." << std::endl;
@@ -365,7 +376,9 @@ bool Processor::interCoreAllocation(float Ub)
             // Resolve fixed point problem
             int limit = 0;
             
-            while (tmp_compl_t != compl_times && ++limit < 200)
+            auto diff = -1;
+            
+            while (diff > 1 && ++limit < 200)
             {
                 //std::cout << "Trying to converge" << std::endl;
                 // old response times = current response times
@@ -376,6 +389,8 @@ bool Processor::interCoreAllocation(float Ub)
                 
                 // compute new response times
                 tmp_compl_t = getCompletionTimes();
+                
+                diff = getMaxDiff(compl_times, tmp_compl_t);
             }
             
             offsets = setNewOffsets();
@@ -540,7 +555,9 @@ bool Processor::interCoreAllocation(float Ub)
             
             //clearOffsets();
             
-            while (tmp_compl_t != compl_times && ++limit < 200)
+            auto diff = -1;
+            
+            while (diff > 1 && ++limit < 200)
             {
                 // old response times = current response times
                 compl_times = tmp_compl_t;
@@ -550,14 +567,17 @@ bool Processor::interCoreAllocation(float Ub)
                 
                 // compute new response times
                 tmp_compl_t = getCompletionTimes();
+                
+                diff = getMaxDiff(compl_times, tmp_compl_t);
             }
             
             bool is_sched = checkSchedulability();
-            if (tmp_compl_t != compl_times || is_sched == false)
+            if (diff > 1 || is_sched == false)
             {
                 //std::cout << "ERROR: I removed the affine set and I am not able"
                 //<< " to find a schedulable solution anymore" << std::endl;
                 errors << "ERROR" << std::endl;
+                //std::cout << "Diff: " << diff << ", is_sched: " << is_sched << std::endl;
                 return false;
             }
             
@@ -565,13 +585,9 @@ bool Processor::interCoreAllocation(float Ub)
 
     } // while( NAR.size() != 0 )
     
-//    print(std::cout);
-    
     computeRT();
-//    auto memory_before = total_size;
-//    optimizeRT2();
-//    std::cout << "Total memory before and after: " << memory_before << " -> "
-//    <<  total_size << std::endl;
+    optimizeRT2();
+    
     errors.close();
     return true;
 }
