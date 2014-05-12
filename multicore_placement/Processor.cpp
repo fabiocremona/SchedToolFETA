@@ -26,6 +26,8 @@
 
 //#define DEBUG_ICA
 
+#define LIMIT 100
+
 bool sort_density(Task* a, Task* b)
 {
     return (( (a)->get()[0] / (a)->getPeriod() ) >
@@ -156,9 +158,9 @@ bool Processor::checkSchedulability(std::map<Function*, float>& resp_t)
     return true;
 }
 
-std::map<Task*, long> Processor::getOffsets()
+std::map<Task*, float> Processor::getOffsets()
 {
-    std::map<Task*, long> offsets;
+    std::map<Task*, float> offsets;
     for (auto core : cores)
         for (auto task : core->getTs())
             offsets[task] = task->getOffset();
@@ -180,16 +182,26 @@ std::map<Task*, float> Processor::getNewOffsets()
     
     for (auto c : cores)
     {
-        for (auto t : c->getTs())
+        auto tasks = c->getTs();
+        for (auto t : tasks)
         {
             float offset = 0;
-            for (auto f : t->getFunctions())
+            auto funs = t->getFunctions();
+            TaskSet *max_core = nullptr;
+            for (auto f : funs)
             {
-                for (auto p : f->getPredecessors())
+                auto preds = f->getPredecessors();
+                for (auto p : preds)
                     if (respt_f[p.first] > offset)
+                    {
+                        max_core = getCore(p.first);
                         offset = respt_f[p.first];
+                    }
             }
-            offsets_t[t] = offset;
+            if (max_core == c)
+                offsets_t[t] = 0;
+            else
+                offsets_t[t] = offset;
         }
     }
     
@@ -208,7 +220,9 @@ std::vector<TaskSet*> Processor::getAllocCores()
 
 std::map<Task*, float> Processor::setNewOffsets()
 {
+    // Get new offsets and returns they by tasks
     auto offsets = getNewOffsets();
+    
     for (auto t : offsets)
         t.first->setOffset(t.second);
     return offsets;
@@ -237,6 +251,12 @@ void Processor::clearOffsets()
             task->setOffset(0);
 }
 
+void Processor::adjustPriorities()
+{
+    for (auto core : cores)
+        core->adjustPriorities();
+}
+
 bool Processor::checkSchedulability()
 {
     auto alloc_cores = getAllocCores();
@@ -255,20 +275,57 @@ bool Processor::checkSchedulability()
     return true;
 }
 
-std::pair<TaskSet*, float> Processor::getOffset(Function *f)
+std::pair<TaskSet*, float> Processor::computeOffset(Function *f)
 {
-    float offset = 0;
+    float offset = 0.0;
     TaskSet* core = nullptr;
-    for (auto p : f->getPredecessors())
+    Function* function = nullptr;
+    auto preds = f->getPredecessors();
+    
+    for (auto pred : preds)
     {
-        auto ct = getCore(p.first)->getCompletionTime(p.first);
+        Function* p = pred.first;
+        auto ct = getCore(p)->getCompletionTime(p);
+        
         if (ct > offset)
         {
             offset = ct;
-            core = getCore(p.first);
+            core = getCore(p);
+            function = p;
         }
     }
     return make_pair(core, offset);
+}
+
+void Processor::discoverLoop(Function *f, TaskSet* c, long i, std::vector<long> &p)
+{
+    auto predecessors0 = f->getPredecessors();
+    std::vector<long> priorities;
+    
+    for (auto pred0 : predecessors0)
+    {
+        auto p0 = pred0.first;
+        auto my_core = getCore(p0);
+        
+        // If my_core == core and the index i == -1, I found a loop
+        // Store the priority of the task in which p0 is allocated
+        if (my_core == c && i == -1)
+        {
+            p.push_back(my_core->getPriority(p0));
+            continue;
+        }
+        
+        // If my_core != core, there is a possible loop.
+        // I keep track of this changes of core (for a predecessor) by storing
+        // -1 in i
+        
+        else if (my_core != c)
+            discoverLoop(p0, c, -1, p);
+        
+        else
+            discoverLoop(p0, c, 0, p);
+        
+    }
 }
 
 void Processor::printPercentage()
@@ -277,10 +334,10 @@ void Processor::printPercentage()
     << NAR.size() << std::endl;
 }
 
-float Processor::getMaxDiff(std::map<Function*, float> A, std::map<Function*, float> B)
+float Processor::getMaxDiff(std::map<Function*, float> A,
+                            std::map<Function*, float> B)
 {
-    std::map<Function*, float> DIFF;
-    float max = 0;
+    float max = 0.0;
     for (auto f : A)
         if (max < std::abs(A[f.first] - B[f.first]))
             max = std::abs(A[f.first] - B[f.first]);
@@ -312,7 +369,7 @@ bool Processor::interCoreAllocation(float Ub)
         else affine_cores = cores;
         
 #ifdef DEBUG_ICA
-        std::cout << "Trying to allocate: " << runnable->getName() << std::endl;
+        std::cout << std::endl << "Trying to allocate: " << runnable->getName() << std::endl;
         
         std::cout << "Affine cores " << affine_cores.size() << std::endl;
         for (auto c : affine_cores)
@@ -358,43 +415,92 @@ bool Processor::interCoreAllocation(float Ub)
             // If the worst offset is with respect to core, assign runnable
             // without offset, otherwise assign with offset
             
-            auto core_offset = getOffset(runnable);
-            if (core_offset.first == core)
-                core->addFunction(runnable);
+            std::pair<TaskSet*, float> core_offset = computeOffset(runnable);
+            float max_off = core_offset.second;
+            
+            std::pair<float, long> hp_allocation = core->testRunnable(runnable);
+            float hp_start_time = hp_allocation.first;
+            
+            
+            // Discover loops
+            std::vector<long> priorities;
+            discoverLoop(runnable, core, 0, priorities);
+            long loop_priority = 0;
+            if (priorities.size() != 0)
+            {
+                loop_priority = *std::max_element(priorities.begin(),
+                                                  priorities.end());
+            }
+            
+            // In case the hypotetical start time of the runnable in core is
+            // higher or equal of the maximum offset, then allocate without
+            // offset
+            if (hp_start_time >= max_off)
+            {
+#ifdef DEBUG_ICA
+                std::cout << "Allocation without offset" << std::endl;
+#endif
+                if (loop_priority == 0)
+                    core->addFunction(runnable);
+                else
+                    core->addFunction(runnable, loop_priority);
+            }
+            
+            // In case the hypotetical start time of the runnable in core is
+            // lower of the maximum offset, then allocate with offset
             else
-                core->addFunction(runnable, core_offset.second);
+            {
+#ifdef DEBUG_ICA
+                std::cout << "Allocation with offset" << std::endl;
+#endif
+                if (loop_priority == 0)
+                    core->addFunction(runnable, max_off);
+                else
+                    core->addFunction(runnable, max_off, loop_priority);
+            }
             
             // Take the new completion times
             auto tmp_compl_t = getCompletionTimes();
             
             // Add the response time of the new runnable to "resp_times"
             compl_times[runnable] = tmp_compl_t[runnable];
-
-            // The offsets I use
+            tmp_compl_t[runnable] = core->getCompletionTime(runnable);
+            compl_times[runnable] = tmp_compl_t[runnable];
+            
+            // The offsets
             std::map<Task*, float> offsets;
             
             // Resolve fixed point problem
             int limit = 0;
             
-            auto diff = -1;
-            
-            while (diff > 1 && ++limit < 200)
+            auto diff = 2;
+#ifdef DEBUG_ICA
+            std::cout << "Solving FP..." << std::endl;
+#endif
+            while (diff >= 1 && ++limit < LIMIT)
             {
                 //std::cout << "Trying to converge" << std::endl;
-                // old response times = current response times
+                //old response times = current response times
                 compl_times = tmp_compl_t;
                 
                 // Set new offsets
                 offsets = setNewOffsets();
-                
+
                 // compute new response times
                 tmp_compl_t = getCompletionTimes();
+                tmp_compl_t[runnable] = core->getCompletionTime(runnable);
+                compl_times[runnable] = tmp_compl_t[runnable];
                 
                 diff = getMaxDiff(compl_times, tmp_compl_t);
+                
+#ifdef DEBUG_ICA
+                std::cout << "Max diff: " << diff << std::endl;
+                std::cout << "Completion times: " << std::endl;
+                for (auto c : tmp_compl_t)
+                    std::cout << "\t" << c.second << std::endl;
+#endif
             }
-            
-            offsets = setNewOffsets();
-            
+             
 #ifdef DEBUG_ICA
             std::cout << "Offsets after allocation:" << std::endl;
             for (auto t : offsets)
@@ -405,7 +511,7 @@ bool Processor::interCoreAllocation(float Ub)
             // If the solution converge and is schedulable
             bool is_sched = checkSchedulability();
             
-            if (tmp_compl_t == compl_times && is_sched == true)
+            if (diff <= 1 && is_sched == true)
             {
 #ifdef DEBUG_ICA
                 std::cout << "Schedulable" << std::endl;
@@ -435,6 +541,12 @@ bool Processor::interCoreAllocation(float Ub)
                     }
                 }
             }
+            else
+            {
+#ifdef DEBUG_ICA
+                std::cout << "S - Diff: " << diff << ", is_sched: " << is_sched << std::endl;
+#endif
+            }
             
             // Remove the assignment and restore the offsets
             for (auto core : cores)
@@ -443,7 +555,11 @@ bool Processor::interCoreAllocation(float Ub)
 
             core->removeFunction(runnable);
             
+            adjustPriorities();
         }
+        
+        
+
 #ifdef DEBUG_ICA
         std::cout << "Affine schedulable solutions: " << slacks.size()
         << std::endl;
@@ -485,6 +601,7 @@ bool Processor::interCoreAllocation(float Ub)
             
             // Remove "runnable" from those runnables to allocate
             NAR.erase(std::find(NAR.begin(), NAR.end(), runnable));
+
         }
         
         else if (slacks.size() == 0)
@@ -553,11 +670,11 @@ bool Processor::interCoreAllocation(float Ub)
             std::map<Function*, float> compl_times;
             long limit = 0;
             
-            //clearOffsets();
+            clearOffsets();
             
-            auto diff = -1;
+            auto diff = 2;
             
-            while (diff > 1 && ++limit < 200)
+            while (diff >= 1 && ++limit < LIMIT)
             {
                 // old response times = current response times
                 compl_times = tmp_compl_t;
@@ -574,10 +691,10 @@ bool Processor::interCoreAllocation(float Ub)
             bool is_sched = checkSchedulability();
             if (diff > 1 || is_sched == false)
             {
-                //std::cout << "ERROR: I removed the affine set and I am not able"
-                //<< " to find a schedulable solution anymore" << std::endl;
                 errors << "ERROR" << std::endl;
-                //std::cout << "Diff: " << diff << ", is_sched: " << is_sched << std::endl;
+#ifdef DEBUG_ICA
+                std::cout << "R- Diff: " << diff << ", is_sched: " << is_sched << std::endl;
+#endif
                 return false;
             }
             
@@ -585,8 +702,8 @@ bool Processor::interCoreAllocation(float Ub)
 
     } // while( NAR.size() != 0 )
     
-    computeRT();
-    optimizeRT2();
+    //computeRT();
+    //optimizeRT2();
     
     errors.close();
     return true;

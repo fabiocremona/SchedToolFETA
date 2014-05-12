@@ -31,10 +31,10 @@
 #include "Allocation.h"
 #include "sa_solver.h"
 
-#define NI 300
+#define NI 1000
 #define NC 4
 
-
+#define ONLY_GS
 
 #ifndef DEBUG
 #include <omp.h>
@@ -81,24 +81,44 @@ int main( int argc, const char*   argv[] )
     for (int i = 10; i <= (NC*10); i++)
         memory_relative.push_back(0);
     
+    
+    long counter = 0;
+    
 #ifndef DEBUG
 #pragma omp parallel for
 #endif
+#ifndef DEBUG
     for (auto c = 10; c <= (NC*10); c++)
     {
+#endif
+#ifdef DEBUG
+    for (auto c = 10; c <= (10); c++)
+    {
+#endif
 
         float load = c / 10.0;
 
 #ifndef DEBUG
+        
 #pragma omp parallel for
-#endif
         for (auto i = 0; i < NI; i++)
         {
+#endif
+            
+#ifdef DEBUG
+        for (auto i = 0; i < 1; i++)
+        {
+#endif
+            
 #ifndef DEBUG
 #pragma omp critical(indexes)
 #endif
             {
-            std::cout << "Load: " << c << ", iteration: " << i << std::endl;
+                ++counter;
+                float done_perc = counter / (31.0*NI) * 100.0;
+                std::cout << "Done: " << done_perc << " % " << std::endl;
+                
+                //std::cout << "Load: " << c << ", iteration: " << i << std::endl;
             }
             
             // Function graph generation
@@ -106,11 +126,13 @@ int main( int argc, const char*   argv[] )
             std::string tgff_file_name = "test_graph" + to_string(c) + "_" + to_string(i);
             std::string command = "./tgff " + tgff_file_name;
 #endif
+            
 #ifdef DEBUG
             std::string tgff_file_name = "/Users/fabiocremona/Documents/SSSA-PhD/Works/FETA/multicore_placement/multicore_placement/test_graph" + to_string(c) + "_" + to_string(i);
             std::string command = "/Users/fabiocremona/Documents/SSSA-PhD/Works/FETA/multicore_placement/multicore_placement/tgff " + tgff_file_name;
 #endif
             
+            std::string command_rm = "rm " + tgff_file_name + '*';
             ofstream input;
             input.open(tgff_file_name + ".tgffopt");
 
@@ -127,13 +149,23 @@ int main( int argc, const char*   argv[] )
             
             Parser ps0(tgff_file_name + ".tgff", load);
             ps0.create();
-
+#ifdef DEBUG
+            auto fun_list = ps0.getFunctions();
+            std::cout << "Function list: " << std::endl;
+            for (auto f : fun_list)
+                f->print(std::cout);
+            std::cout << std::endl << std::endl;
+#endif
+            // Remove tgff files
+            system(command_rm.c_str());
+            
             // Pseudo Gready Slacker
             
             Processor p0(ps0.getFunctions(), NC);
-            bool is_sched_gs = p0.interCoreAllocation(0.2);
+            bool is_sched_gs = p0.interCoreAllocation(load/NC);
             if (is_sched_gs == true)
             {
+                
 #ifndef DEBUG
 #pragma omp atomic
 #endif
@@ -142,7 +174,7 @@ int main( int argc, const char*   argv[] )
             
             
             // Simulating Annealing
-#ifndef DEBUG
+#ifndef ONLY_GS
             TaskSet ts0(*ps0.singleFunctionTask());
             Allocation alloc(&ts0, NC);
             Allocation alloc_final;
@@ -172,7 +204,7 @@ int main( int argc, const char*   argv[] )
         }
     }
 
-#ifndef DEBUG
+#ifndef ONLY_GS
 #pragma omp critical(output)
     {
         float load = 1.0;
@@ -185,8 +217,20 @@ int main( int argc, const char*   argv[] )
             
             load += 0.1;
         }
-    }    
+    }
 #endif
+
+#ifdef ONLY_GS
+        float load = 1.0;
+        results_p << "Load\tM_GS" << std::endl;
+        for (auto i = 0; i < occurs_vector.size(); i++)
+        {
+            results_p << load << "\t" << occurs_vector[i] << std::endl;
+            
+            load += 0.1;
+        }
+#endif
+
     results_p.close();
 
     time (&rawtime);

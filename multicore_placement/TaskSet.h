@@ -82,12 +82,13 @@ public:
     void printRbfs(std::ostream&);
     
     void add(Feta *);
-    void addFunction(Function*);
-        
-    // Add a function to the taskset
-    void addFunction(Function*, float);
     
-    float addFunction(Function*, Processor*);
+    // Add a function to the taskset
+    void addFunction(Function*);
+    void addFunction(Function*, float);
+    void addFunction(Function*, long);
+    void addFunction(Function*, float, long);
+    
     void remove(Feta *);
     void removeFunction(Function*);
         
@@ -151,6 +152,9 @@ public:
     bool schedTest();
 
     float getLoad();
+    
+    // Returns the pair start_time - priority
+    std::pair<float, long> testRunnable(Function* );
     
     // ====> Here below, is for optimization <====
     

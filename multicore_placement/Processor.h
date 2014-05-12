@@ -70,7 +70,7 @@ class Processor {
     bool checkSchedulability();
     
     // Returns the offsets of all the tasks in all the tasksets
-    std::map<Task*, long> getOffsets();
+    std::map<Task*, float> getOffsets();
     
     // Compute the offsets for all tasks with respect to the allocated
     // runnables
@@ -87,12 +87,18 @@ class Processor {
     // Returns the set of cores which contains at list one task
     std::vector<TaskSet*> getAllocCores();
     
-    // Returns the offset for a given runnable
-    std::pair<TaskSet*, float> getOffset(Function*);
+    // Compute and returns the offset for a given runnable.
+    // It returns the value of the worst offset computed and its taskset
+    std::pair<TaskSet*, float> computeOffset(Function*);
     
     void printPercentage();
     
     float getMaxDiff(std::map<Function*, float>, std::map<Function*, float>);
+    
+    void discoverLoop(Function*, TaskSet*, long, std::vector<long> &);
+    
+    void adjustPriorities();
+    
 public:
     
     Processor(std::vector<Task* > , int);

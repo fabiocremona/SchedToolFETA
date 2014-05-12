@@ -529,7 +529,7 @@ bool TaskSet::computeResponseTimeO()
             if (t < ti)
                 t += this_task->getPeriod();
             
-            auto D = ti + (t - ti) + this_task->dstNext(t);
+            float D = ti + (t - ti) + this_task->dstNext(t);
 #ifdef DEBUG_RT
             std::cout << "D: " << D << std::endl;
 #endif
@@ -669,14 +669,44 @@ bool TaskSet::computeResponseTimeO()
         }
     }
     
-    auto wcrt = 0;
+    float wcrt = 0.0;
     if (interm_resp_t.size() == 0)
         return false;
     else
         wcrt = *std::max_element(interm_resp_t.begin(),
                                   interm_resp_t.end());
+    //std::cout << wcrt << std::endl;
     response_t.push_back(wcrt);
     return true;
+}
+
+std::pair<float, long> TaskSet::testRunnable(Function* runnable)
+{
+    std::pair<float, long> st_p; // Start time - Priority
+    long this_period = runnable->getPeriod();
+    long this_priority = 0;
+    Task* hp_task = nullptr;
+    
+    // Take the lowest priority between those if the tasks with the same period
+    for (auto task : taskset)
+    {
+        if (task->getPeriod() <= this_period)
+        {
+            this_priority = task->getPriority();
+            hp_task = task;
+        }
+    }
+    if (this_priority != 0)
+    {
+        auto cp_hp_task = getCompletionTime(hp_task->getFunctions().back());
+        st_p = std::make_pair(cp_hp_task, this_priority);
+        return st_p;
+    }
+    else
+    {
+        st_p = std::make_pair(0.0, 1);
+        return st_p;
+    }
 }
 
 std::vector<float> TaskSet::getResponseTimes()
@@ -715,13 +745,14 @@ float TaskSet::getResponseTime(Function *f)
     // Now create the task with function f and with all the tasks at higher
     //  execution order than f itself
     Task tmp_task;
-    auto fun = the_task->getFunctions().begin();
-    while (*fun != f)
+    auto fun_list = the_task->getFunctions();
+    for (auto fun = fun_list.begin(); fun != fun_list.end(); fun++)
     {
         tmp_task.add(*fun);
-        fun++;
+        if ((*fun) == f)
+            break;
     }
-    tmp_task.add(f);
+    
     tmp_task.changePriority(the_priority);
     tmp_task.setOffset(the_task->getOffset());
     tmp_ts.add(&tmp_task);
@@ -733,14 +764,21 @@ float TaskSet::getResponseTime(Function *f)
         return -1;
     // Else, returns the response time of the runnable f
     else
+    {
+        //std::cout << "RespT: " << tmp_ts.getResponseTimes().back() << std::endl;
         return tmp_ts.getResponseTimes().back();
+    }
 }
 
 float TaskSet::getCompletionTime(Function * f)
 {
     auto task = getTask(f);
     if (task != nullptr)
-        return ( getResponseTime(f) + getTask(f)->getOffset() );
+    {
+        auto ct = getResponseTime(f);
+        auto of = getTask(f)->getOffset();
+        return ( ct + of );
+    }
     else
         return -1;
 }
@@ -842,13 +880,17 @@ void TaskSet::addFunction(Function *f)
 {
     bool allocated = false;
     
+    Task* the_task = nullptr;
+    
+    // Determine the lowest priority task with the same period of the runnable
     for (auto task : taskset)
-    {
         if (task->getPeriod() == f->getPeriod())
-        {
-            task->add(f);
-            allocated = true;
-        }
+            the_task = task;
+    
+    if (the_task != nullptr)
+    {
+        the_task->add(f);
+        allocated = true;
     }
     
     if (allocated == false)
@@ -858,15 +900,15 @@ void TaskSet::addFunction(Function *f)
         new_task->add(f);
         taskset.push_back(new_task);
         
-        // Re-assign priorities
-        // Get tasks with lower period
+        // Decrease priority of tasks with higher period
         for (auto task : taskset)
             if (task->getPeriod() > f->getPeriod())
                 task->changePriority(task->getPriority() + 1);
         
+        // Compute the priority of the new task
         std::vector<long> priorities;
         for (auto task : taskset)
-            if (task->getPeriod() < f->getPeriod())
+            if (task->getPeriod() <= f->getPeriod())
                 priorities.push_back(task->getPriority());
         
         if (priorities.size() == 0)
@@ -898,21 +940,20 @@ void TaskSet::addFunction(Function *f, float offset)
 {
     bool allocated = false;
     
-    // If already exist a task running at the same period of function "f"
-    //  add f to this task
+    
+    Task* the_task = nullptr;
+    
+    // Determine the lowest priority task with the same period of the runnable
     for (auto task : taskset)
-    {
         if (task->getPeriod() == f->getPeriod())
-        {
-            task->add(f);
-            
-            // Change the offset of the task if the previous offset is smaller
-            //  than the new one
-            if (task->getOffset() < offset)
-                task->setOffset(offset);
-            
-            allocated = true;
-        }
+            the_task = task;
+    
+    if (the_task != nullptr)
+    {
+        the_task->add(f);
+        if (the_task->getOffset() < offset)
+            the_task->setOffset(offset);
+        allocated = true;
     }
     
     // The runnable has not been allocated on previous tasks and a new task
@@ -928,19 +969,12 @@ void TaskSet::addFunction(Function *f, float offset)
         Task* new_task = new Task();
         new_task->add(f);
         taskset.push_back(new_task);
-        
-        // Set the offset for the new task
         new_task->setOffset(offset);
         
-        // Re-assign priorities
-        // Get tasks with lower period
-        for (auto task : taskset)
-            if (task->getPeriod() > f->getPeriod())
-                task->changePriority(task->getPriority() + 1);
-        
+        // Compute the priority of the new task
         std::vector<long> priorities;
         for (auto task : taskset)
-            if (task->getPeriod() < f->getPeriod())
+            if (task->getPeriod() <= f->getPeriod())
                 priorities.push_back(task->getPriority());
         
         if (priorities.size() == 0)
@@ -952,6 +986,100 @@ void TaskSet::addFunction(Function *f, float offset)
         new_task->changePriority(priority);
     }
 
+    // Compute Period
+    for (auto task : taskset)
+    {
+        if (task->getFunSize())
+        {
+            period = task->getPeriod();
+            break;
+        }
+    }
+	for (auto i = taskset.begin(); i != taskset.end(); i++)
+        if ((*i)->getFunSize())
+            period = gcd(period, (*i)->getPeriod());
+    
+    std::sort(taskset.begin(), taskset.end(), tasksort);
+}
+
+void TaskSet::addFunction(Function *f, long max_p)
+{
+    bool allocated = false;
+    
+    Task* the_task = nullptr;
+    
+    // Determine the lowest priority task with the same period of the runnable
+    for (auto task : taskset)
+        if (task->getPriority() == (max_p+1))
+            the_task = task;
+    
+    if (the_task != nullptr)
+    {
+        the_task->add(f);
+        allocated = true;
+    }
+    
+    if (allocated == false)
+    {
+        // Create the new task
+        Task* new_task = new Task();
+        new_task->add(f);
+        new_task->changePriority(max_p+1);
+        taskset.push_back(new_task);
+    }
+    
+    // Compute Period
+    for (auto task : taskset)
+    {
+        if (task->getFunSize())
+        {
+            period = task->getPeriod();
+            break;
+        }
+    }
+	for (auto i = taskset.begin(); i != taskset.end(); i++)
+        if ((*i)->getFunSize())
+            period = gcd(period, (*i)->getPeriod());
+    
+    std::sort(taskset.begin(), taskset.end(), tasksort);
+}
+
+void TaskSet::addFunction(Function *f, float offset, long max_p)
+{
+    bool allocated = false;
+    
+    
+    Task* the_task = nullptr;
+    
+    // Determine the lowest priority task with the same period of the runnable
+    for (auto task : taskset)
+        if (task->getPriority() == (max_p+1))
+            the_task = task;
+    
+    if (the_task != nullptr)
+    {
+        the_task->add(f);
+        if (the_task->getOffset() < offset)
+            the_task->setOffset(offset);
+        allocated = true;
+    }
+    
+    // The runnable has not been allocated on previous tasks and a new task
+    //  must be created for it
+    if (allocated == false)
+    {
+        // Decrease priority of tasks with higher period
+        for (auto task : taskset)
+            if (task->getPeriod() > f->getPeriod())
+                task->changePriority(task->getPriority() + 1);
+        
+        // Create the new task
+        Task* new_task = new Task();
+        new_task->add(f);
+        new_task->changePriority(max_p+1);
+        taskset.push_back(new_task);
+    }
+    
     // Compute Period
     for (auto task : taskset)
     {
@@ -1104,7 +1232,6 @@ void TaskSet::setRMPriorities()
 
 void TaskSet::adjustPriorities()
 {
-    std::map<long, long> tmp_p;
     std::sort(taskset.begin(), taskset.end(), tasksort);
     
     long p = 1;
