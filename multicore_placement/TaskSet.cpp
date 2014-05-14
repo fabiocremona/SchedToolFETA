@@ -783,6 +783,59 @@ float TaskSet::getCompletionTime(Function * f)
         return -1;
 }
 
+float TaskSet::getStartTime(Function * f)
+{
+    auto task = getTask(f);
+    if (task != nullptr)
+    {
+        auto runnables = task->getFunctions();
+        
+        // the_function is the function right before f in the task
+        Function * the_function = nullptr;
+        for (auto function : runnables)
+        {
+            if (function != f)
+                the_function = function;
+            else
+                break;
+
+        }
+        auto of = task->getOffset();
+        if (the_function == nullptr)
+        {
+            return getStartTime(task);
+        }
+        else
+        {
+            auto ct = getCompletionTime(the_function);
+            return ct;
+        }
+    }
+    else
+        return -1;
+}
+
+float TaskSet::getStartTime(Task * t)
+{
+    Task* the_task = nullptr;
+    for (auto task : taskset)
+        if (task->getPriority() < t->getPriority())
+            the_task = task;
+    
+    if (the_task != nullptr)
+    {
+        auto runnables = the_task->getFunctions();
+        
+        // the_function is the function right before f in the task
+        Function * the_function = the_task->getFunctions().back();
+        auto ct = getResponseTime(the_function);
+        auto of = the_task->getOffset();
+        return ( ct + of );
+    }
+    else
+        return 0;
+}
+
 std::vector<float> TaskSet::getSlack()
 {
     return slaks;
@@ -900,6 +953,8 @@ void TaskSet::addFunction(Function *f)
         new_task->add(f);
         taskset.push_back(new_task);
         
+        //if (taskset.size() == 0) new_task->changePriority(1);
+        
         // Decrease priority of tasks with higher period
         for (auto task : taskset)
             if (task->getPeriod() > f->getPeriod())
@@ -934,6 +989,24 @@ void TaskSet::addFunction(Function *f)
             period = gcd(period, (*i)->getPeriod());
     
     std::sort(taskset.begin(), taskset.end(), tasksort);
+    adjustPriorities();
+}
+
+void TaskSet::addFunction(Function *f, long P, float O)
+{
+    Task* the_task = getTask(P);
+    if (the_task == nullptr)
+    {
+        Task* new_task = new Task();
+        new_task->add(f);
+        new_task->setOffset(O);
+        new_task->changePriority(P);
+        taskset.push_back(new_task);
+    }
+    else
+    {
+        the_task->add(f);
+    }
 }
 
 void TaskSet::addFunction(Function *f, float offset)
@@ -971,6 +1044,8 @@ void TaskSet::addFunction(Function *f, float offset)
         taskset.push_back(new_task);
         new_task->setOffset(offset);
         
+        //if (taskset.size() == 0) new_task->changePriority(1);
+        
         // Compute the priority of the new task
         std::vector<long> priorities;
         for (auto task : taskset)
@@ -1000,6 +1075,7 @@ void TaskSet::addFunction(Function *f, float offset)
             period = gcd(period, (*i)->getPeriod());
     
     std::sort(taskset.begin(), taskset.end(), tasksort);
+    adjustPriorities();
 }
 
 void TaskSet::addFunction(Function *f, long max_p)
@@ -1042,6 +1118,7 @@ void TaskSet::addFunction(Function *f, long max_p)
             period = gcd(period, (*i)->getPeriod());
     
     std::sort(taskset.begin(), taskset.end(), tasksort);
+    adjustPriorities();
 }
 
 void TaskSet::addFunction(Function *f, float offset, long max_p)
@@ -1077,6 +1154,7 @@ void TaskSet::addFunction(Function *f, float offset, long max_p)
         Task* new_task = new Task();
         new_task->add(f);
         new_task->changePriority(max_p+1);
+        new_task->setOffset(offset);
         taskset.push_back(new_task);
     }
     
@@ -1094,6 +1172,7 @@ void TaskSet::addFunction(Function *f, float offset, long max_p)
             period = gcd(period, (*i)->getPeriod());
     
     std::sort(taskset.begin(), taskset.end(), tasksort);
+    adjustPriorities();
 }
 
 void TaskSet::removeFunction(Function *f)
@@ -1145,6 +1224,7 @@ void TaskSet::removeFunction(Function *f)
     
     computeFeta();
     std::sort(taskset.begin(), taskset.end(), tasksort);
+    adjustPriorities();
 }
 
 void TaskSet::remove(Feta *t)

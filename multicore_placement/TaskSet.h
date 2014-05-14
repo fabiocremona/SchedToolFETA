@@ -88,6 +88,7 @@ public:
     void addFunction(Function*, float);
     void addFunction(Function*, long);
     void addFunction(Function*, float, long);
+    void addFunction(Function*, long, float);
     
     void remove(Feta *);
     void removeFunction(Function*);
@@ -112,6 +113,10 @@ public:
     
     // Returns the response time + offset of a specified runnable
     float getCompletionTime(Function * );
+    
+    float getStartTime(Function * );
+    
+    float getStartTime(Task * );
     
     // Returns the response time of all tasks
     std::vector<float> getResponseTimes();

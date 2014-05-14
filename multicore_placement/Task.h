@@ -72,6 +72,8 @@ public:
     void getFunctionSet(std::vector<Function* >*, int);
     
     void replaceFunctions(std::vector<Function*>);
+    
+    void setFeta(std::vector<float>);
 };
 
 

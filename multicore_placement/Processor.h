@@ -89,13 +89,14 @@ class Processor {
     
     // Compute and returns the offset for a given runnable.
     // It returns the value of the worst offset computed and its taskset
-    std::pair<TaskSet*, float> computeOffset(Function*);
+    std::pair<TaskSet*, float> computeOffset(Function*, TaskSet *);
     
     void printPercentage();
     
     float getMaxDiff(std::map<Function*, float>, std::map<Function*, float>);
     
-    void discoverLoop(Function*, TaskSet*, long, std::vector<long> &);
+    void discoverLoop(Function*, TaskSet*, long, std::vector<long> &,
+                      std::vector<std::string> &);
     
     void adjustPriorities();
     

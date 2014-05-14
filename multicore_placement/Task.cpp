@@ -281,4 +281,9 @@ void Task::replaceFunctions(std::vector<Function *> new_funs)
     
 }
 
+void Task::setFeta(std::vector<float> f)
+{
+    places = f;
+}
+
 
